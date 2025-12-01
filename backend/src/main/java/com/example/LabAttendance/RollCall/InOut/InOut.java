@@ -2,12 +2,16 @@ package com.example.LabAttendance.RollCall.InOut;
 
 import com.example.LabAttendance.RollCall.Attendance.Attendance;
 import jakarta.persistence.*;
-import lombok.Getter;
-
 import java.time.LocalTime;
 
 @Entity
-@Getter
+@Table(
+        name = "inout",
+        indexes = {
+                @Index(name = "idx_start_time", columnList = "startTime"),
+                @Index(name = "idx_end_time", columnList = "endTime")
+        }
+)
 public class InOut {
 
     @Id
