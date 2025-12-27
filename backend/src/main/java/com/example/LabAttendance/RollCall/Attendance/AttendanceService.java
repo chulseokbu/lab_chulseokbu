@@ -1,5 +1,6 @@
 package com.example.LabAttendance.RollCall.Attendance;
 
+import com.example.LabAttendance.RollCall.Attendance.Dto.DailyStayDto;
 import com.example.LabAttendance.RollCall.InOut.InOut;
 import com.example.LabAttendance.RollCall.InOut.InOutRepository;
 import com.example.LabAttendance.RollCall.Member.Member;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -81,4 +83,14 @@ public class AttendanceService {
         inOutRepository.save(inOut);
     }
 
+    public List<DailyStayDto> getLast30Days(Long memberId) {
+
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(30);
+
+        return attendanceRepository.findByMemberIdAndDateBetweenOrderByDateAsc(memberId, start, end)
+                .stream()
+                .map(DailyStayDto::from)
+                .toList();
+    }
 }
