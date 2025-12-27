@@ -4,6 +4,7 @@ import com.example.LabAttendance.RollCall.Attendance.Attendance;
 import jakarta.persistence.*;
 import lombok.Getter;
 
+import java.time.Duration;
 import java.time.LocalTime;
 
 
@@ -36,8 +37,10 @@ public class InOut {
         this.attendance = attendance;
         this.startTime = startTime;
     }
-    public void checkEnd(LocalTime endTime) {
+    public long checkEnd(LocalTime endTime) {
+
         this.endTime = endTime;
+        return Duration.between(startTime, endTime).toMinutes();
     }
 
 }

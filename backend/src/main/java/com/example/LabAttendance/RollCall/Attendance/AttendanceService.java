@@ -32,8 +32,6 @@ public class AttendanceService {
         Attendance entity = attendanceRepository.findByIdAndDate(memberId, LocalDate.now())
                 .orElse(null);
 
-        LocalTime time = LocalTime.now(); // 시작 시간
-
         if (entity == null) {
             entity = new Attendance();
             entity.onCreate();
@@ -48,7 +46,7 @@ public class AttendanceService {
                 entity.toggleAttendance();
             }
         }
-
+        LocalTime time = LocalTime.now(); // 시작 시간
         InOut inOut = new InOut();
         inOut.checkStart(entity,time);
 
@@ -68,7 +66,7 @@ public class AttendanceService {
         if (inOut.getAttendance().getStatus() != AttendanceStatus.IN){
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
-        inOut.checkEnd(end);
+        long inOutMinute= inOut.checkEnd(end);
 
         Attendance entity = attendanceRepository.findByIdAndDate(member.getId(), LocalDate.now())
                 .orElse(null);
@@ -77,7 +75,7 @@ public class AttendanceService {
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
 
-        entity.calculateAttendance(end);
+        entity.addInOut(inOutMinute);
         entity.toggleAttendance();
         attendanceRepository.save(entity);
         inOutRepository.save(inOut);
