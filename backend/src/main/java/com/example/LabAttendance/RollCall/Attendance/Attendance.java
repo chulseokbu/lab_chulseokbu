@@ -19,7 +19,14 @@ import java.util.List;
         name = "attendance",
         indexes = {
                 @Index(name = "idx_attendance_date", columnList = "date")
-        }
+        },
+        uniqueConstraints = {
+        @UniqueConstraint(
+                name = "uk_attendance_member_date",
+                columnNames = {"member_id", "date"}
+        )
+            }
+
 )
 public class Attendance {
 
