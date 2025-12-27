@@ -32,6 +32,8 @@ public class Attendance {
 
     private Long total; // 객체 생성 시점에 0으로 할당.
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private AttendanceStatus status;
 
     @ManyToOne(fetch = FetchType.LAZY)
