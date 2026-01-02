@@ -1,5 +1,6 @@
 package com.example.LabAttendance.RollCall.Attendance;
 
+import com.example.LabAttendance.RollCall.Attendance.Dto.DailyStayDto;
 import com.example.LabAttendance.RollCall.InOut.InOut;
 import com.example.LabAttendance.RollCall.InOut.InOutRepository;
 import com.example.LabAttendance.RollCall.Member.Member;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,8 +32,6 @@ public class AttendanceService {
         Attendance entity = attendanceRepository.findByIdAndDate(memberId, LocalDate.now())
                 .orElse(null);
 
-        LocalTime time = LocalTime.now(); // 시작 시간
-
         if (entity == null) {
             entity = new Attendance();
             entity.onCreate();
@@ -46,7 +46,7 @@ public class AttendanceService {
                 entity.toggleAttendance();
             }
         }
-
+        LocalTime time = LocalTime.now(); // 시작 시간
         InOut inOut = new InOut();
         inOut.checkStart(entity,time);
 
@@ -66,7 +66,7 @@ public class AttendanceService {
         if (inOut.getAttendance().getStatus() != AttendanceStatus.IN){
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
-        inOut.checkEnd(end);
+        long inOutMinute= inOut.checkEnd(end);
 
         Attendance entity = attendanceRepository.findByIdAndDate(member.getId(), LocalDate.now())
                 .orElse(null);
@@ -75,10 +75,20 @@ public class AttendanceService {
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
 
-        entity.calculateAttendance(end);
+        entity.addInOut(inOutMinute);
         entity.toggleAttendance();
         attendanceRepository.save(entity);
         inOutRepository.save(inOut);
     }
 
+    public List<DailyStayDto> getLast30Days(Long memberId) {
+
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(30);
+
+        return attendanceRepository.findByMemberIdAndDateBetweenOrderByDateAsc(memberId, start, end)
+                .stream()
+                .map(DailyStayDto::from)
+                .toList();
+    }
 }

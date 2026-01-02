@@ -1,6 +1,7 @@
 package com.example.LabAttendance.RollCall.Attendance;
 
 
+import com.example.LabAttendance.RollCall.InOut.Dto.CheckInDto;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckInException;
 import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayException;
 import com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse;
@@ -9,7 +10,10 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
@@ -19,12 +23,13 @@ public class AttendanceController {
     private final AttendanceService attendanceService;
 
     @PostMapping("/in")
-    public ResponseEntity<ApiResponse<Long>> checkIn(
+    public ResponseEntity<ApiResponse<CheckInDto>> checkIn(
             @AuthenticationPrincipal Long memberId)
             {
         try{
             return ResponseEntity.status(200)
-                    .body(ApiResponse.success(attendanceService.checkInLab(memberId),"체크인 되었습니다."));
+                    .body(ApiResponse.success(
+                            new CheckInDto(attendanceService.checkInLab(memberId)),"체크인 되었습니다."));
         }catch (AlreadyCheckInException e){
             return ResponseEntity.status(400).body(ApiResponse.failure(e.getMessage()));
         }
