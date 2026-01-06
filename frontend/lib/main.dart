@@ -5,12 +5,66 @@ import 'package:frontend/TabBar/Shared_widgets.dart';
 import 'package:frontend/HomeTab/Views/NotificationView.dart';
 import 'package:frontend/HomeTab/Views/daily_status_view.dart';
 import 'package:frontend/HomeTab/Views/EditProfileView.dart';
+import 'package:frontend/HomeTab/AuthTab/AuthScreen.dart';
 void main() {
   runApp(const MyApp());
 }
 
 const BGC = Color(0xFFFFFFFF);
 
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+
+class _AuthGateState extends State<AuthGate> {
+  // 💡 핵심: 로그인 상태를 관리하는 변수 (기본값: false)
+  bool _isLoggedIn = false;
+  // 💡 회원가입/로그인 화면 전환을 위한 변수 (기본값: false)
+  bool _isSigningUp = false;
+
+  void _handleLoginSuccess() {
+    setState(() {
+      _isLoggedIn = true;
+    });
+  }
+
+  void _handleGoToSignUp() {
+    setState(() {
+      _isSigningUp = true;
+    });
+  }
+
+  void _handleGoToLogin() {
+    setState(() {
+      _isSigningUp = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoggedIn) {
+      // 🟢 로그인 상태일 경우: 메인 화면 (`MyHomePage`) 표시
+      return const MyHomePage(title: '랩실 출석부');
+    } else {
+      // 🔴 로그아웃 상태일 경우
+      if (_isSigningUp) {
+        // 회원가입 화면 표시 (auth_screens.dart에서 import)
+        return SignUpScreen(onGoToLogin: _handleGoToLogin);
+      } else {
+        // 로그인 화면 표시 (auth_screens.dart에서 import)
+        return LoginScreen(
+          onLoginSuccess: _handleLoginSuccess,
+          onGoToSignUp: _handleGoToSignUp,
+        );
+      }
+    }
+  }
+}
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -24,7 +78,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: BGC),
       ),
-      home: const MyHomePage(title: '랩실 출석부'),
+      home: const AuthGate(),
     );
   }
 }
