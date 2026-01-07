@@ -20,18 +20,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
-
-        if (request.getRequestURI().equals("/lab/users/sign") ||
-                request.getRequestURI().equals("/lab/users/login")
-        ) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
 
         String token = resolveToken(request);
 
@@ -43,6 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+
     private String resolveToken(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
 
@@ -52,4 +45,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         return null;
     }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+
+        return uri.startsWith("/swagger-ui")
+                || uri.startsWith("/v3/api-docs")
+                || uri.equals("/swagger-ui.html")
+                || uri.startsWith("/h2-console")
+                || uri.equals("/lab/users/sign")
+                || uri.equals("/lab/users/login");
+    }
+
 }

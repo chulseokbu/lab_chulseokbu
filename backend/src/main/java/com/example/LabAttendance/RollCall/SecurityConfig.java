@@ -50,9 +50,17 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         // H2 Console 경로 허용
                         .requestMatchers(PathRequest.toH2Console()).permitAll()
+                        .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
+
 
                         // 회원가입 및 로그인 경로는 인증 없이 접근 허용
-                        .requestMatchers("/lab/users/sign", "/lab/users/login").permitAll()
+                        .requestMatchers(
+                                "/lab/users/sign",
+                                "/lab/users/login",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**"
+                                ).permitAll()
 
                         // 그 외 모든 요청은 인증 필요
                         .anyRequest().authenticated()
