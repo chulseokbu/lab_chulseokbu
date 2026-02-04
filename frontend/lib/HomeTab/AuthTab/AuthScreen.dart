@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 // 이미지에서 볼 수 있는 주황색 버튼 색상
 const Color _orangeColor = Color(0xFFE68840);
+const Color _hintTextColor = Color(0xFFCCCCCC);
 const Color _backgroundColor = Color(0xFFFFFFFF);
 const Color _lightOrangeBackground = Color(0xFFFFF7F0);
 // --- 1. 로그인 화면 ---
@@ -63,6 +64,7 @@ class LoginScreen extends StatelessWidget {
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
                           hintText: 'example@university.ac.kr',
+                          hintStyle: TextStyle(color: _hintTextColor),
                           filled: true,
                           fillColor: Colors.white, // 배경색이 흰색일 때 대비를 위해 유지
                           border: OutlineInputBorder(
@@ -84,6 +86,7 @@ class LoginScreen extends StatelessWidget {
                         obscureText: true,
                         decoration: InputDecoration(
                           hintText: '비밀번호를 입력하세요',
+                          hintStyle: TextStyle(color: _hintTextColor),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -335,6 +338,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             obscureText: obscureText,
             decoration: InputDecoration(
               hintText: hintText,
+              hintStyle: const TextStyle(color: _hintTextColor),
               filled: true,
               fillColor: Colors.white,
               // 💡 테두리 색상을 isValid 상태에 따라 변경

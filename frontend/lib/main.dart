@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:frontend/HomeTab/Views/InOutStateView.dart';
 import 'package:frontend/TabBar/Shared_widgets.dart';
 import 'package:frontend/HomeTab/Views/NotificationView.dart';
-import 'package:frontend/HomeTab/Views/daily_status_view.dart';
 import 'package:frontend/HomeTab/Views/EditProfileView.dart';
 import 'package:frontend/HomeTab/AuthTab/AuthScreen.dart';
 import 'package:frontend/HomeTab/Views/AttendanceStatusCard.dart';
+import 'package:frontend/HomeTab/Views/RetentionStatusView.dart';
+import 'package:frontend/Group_Tab/MeetingListScreen.dart';
+import 'package:frontend/services/auth_service.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -25,10 +28,25 @@ class AuthGate extends StatefulWidget {
 
 
 class _AuthGateState extends State<AuthGate> {
-  // 💡 핵심: 로그인 상태를 관리하는 변수 (기본값: false)
+  bool _isLoading = true; // 세션 복원 대기
   bool _isLoggedIn = false;
-  // 💡 회원가입/로그인 화면 전환을 위한 변수 (기본값: false)
   bool _isSigningUp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final restored = await AuthService.instance.restoreSession();
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _isLoggedIn = restored;
+      });
+    }
+  }
 
   void _handleLoginSuccess() {
     setState(() {
@@ -50,9 +68,20 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     if (_isLoggedIn) {
       // 🟢 로그인 상태일 경우: 메인 화면 (`MyHomePage`) 표시
-      return const MyHomePage(title: '랩실 출석부');
+      return MyHomePage(
+        title: '랩실 출석부',
+        onLogout: () async {
+          await AuthService.instance.logout();
+          if (mounted) setState(() => _isLoggedIn = false);
+        },
+      );
     } else {
       // 🔴 로그아웃 상태일 경우
       if (_isSigningUp) {
@@ -87,18 +116,10 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+  const MyHomePage({super.key, required this.title, this.onLogout});
 
   final String title;
+  final VoidCallback? onLogout;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -140,6 +161,7 @@ class _MyHomePageState extends State<MyHomePage> {
               );
             }
           },
+          onLogout: widget.onLogout,
         );
       },
     );
@@ -174,14 +196,11 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     ),
 
-    // [1] 구성원 화면
-    // AttendanceViewScreenContent가 이미 스크롤 가능한 구조라면 그대로 둡니다.
-    const DailyStatusView(),
+    // [1] 모임 화면 - 모임 리스트 메인 (리스트 중 클릭 시 DailyStatusView로 이동)
+    const MeetingListScreen(),
 
-    // [2] 잔류현황 화면 (임시 위젯)
-    const Center(
-      child: Text('잔류 현황 페이지', style: TextStyle(fontSize: 20)),
-    ),
+    // [2] 잔류현황 화면
+    const RetentionStatusView(),
   ];
   // ⭐ 3. BottomNavigationBar 탭 클릭 시 인덱스 업데이트 함수
   void _onItemTapped(int index) {
@@ -229,13 +248,32 @@ class _MyHomePageState extends State<MyHomePage> {
                     style: const TextStyle(fontSize: 16, color: Colors.black87),
                   ),
                   const SizedBox(width: 8),
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: mainOrange,
-                    child: Text(
-                      _currentName.isNotEmpty ? _currentName[0] : '?',
-                      style: const TextStyle(color: BGC, fontWeight: FontWeight.bold),
-                    ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: mainOrange,
+                        child: Text(
+                          _currentName.isNotEmpty ? _currentName[0] : '?',
+                          style: const TextStyle(color: BGC, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      if (_selectedIndex == 2)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.fromBorderSide(BorderSide(color: Color(0xFFF9FAFB), width: 1.5)),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),

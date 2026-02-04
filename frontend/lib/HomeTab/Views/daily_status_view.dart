@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+const Color _mainOrange = Color(0xFFF97316);
+
 // 1. 출석 기록을 위한 간단한 데이터 모델 (변동 없음)
 class AttendanceRecord {
   final String date;
@@ -24,8 +26,8 @@ class DailyStatusView extends StatefulWidget {
 }
 
 class _DailyStatusViewState extends State<DailyStatusView> {
-  // 3. 탭 버튼의 상태를 관리할 변수 (변동 없음)
-  bool _isListView = true; // 기본값은 리스트 뷰 (true: 리스트 뷰, false: 그리드 뷰)
+  // 3. 탭 버튼의 상태를 관리할 변수 - 왼쪽(그리드) 기본 선택
+  bool _isListView = false; // false: 그리드(네모 4개), true: 리스트
 
   // 30일치 더미 데이터 생성 함수 (위치 유지)
   List<AttendanceRecord> _generateDummyData(int count) {
@@ -55,8 +57,8 @@ class _DailyStatusViewState extends State<DailyStatusView> {
               _buildHeader(),
               const SizedBox(height: 16),
 
-              // 6. 이미지에 있던 빈 사각형 플레이스홀더
-              _buildFilterPlaceholder(),
+              // 6. 출석 빈도 (홈 탭과 동일)
+              _buildAttendanceFrequencySection(),
               const SizedBox(height: 16),
 
               // 7. 스크롤 가능한 리스트 영역
@@ -73,31 +75,42 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
   // --- 위젯 빌드 헬퍼 함수 ---
 
-  // 8. 헤더 위젯 (제목 + 탭 버튼) (변동 없음)
+  // 8. 헤더 위젯 (백 버튼 + 제목 + 탭 버튼)
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          '랩실 구성원 출석 현황',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+              onPressed: () => Navigator.of(context).pop(),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            ),
+            const Text(
+              '랩실 구성원 출석 현황',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
         _buildToggleButtons(), // 탭 버튼
       ],
     );
   }
 
-  // 9. 탭 버튼 위젯 (변동 없음)
+  // 9. 탭 버튼 위젯 - 왼쪽: 그리드(네모 4개), 오른쪽: 리스트
   Widget _buildToggleButtons() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFECECEC), // 탭 버튼 배경색
+        color: const Color(0xFFECECEC),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          _buildToggleButton(Icons.grid_view_rounded, !_isListView),
-          _buildToggleButton(Icons.format_list_bulleted_rounded, _isListView),
+          _buildToggleButton(Icons.grid_view_rounded, !_isListView), // 왼쪽: 그리드
+          _buildToggleButton(Icons.format_list_bulleted_rounded, _isListView), // 오른쪽: 리스트
         ],
       ),
     );
@@ -141,14 +154,33 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     );
   }
 
-  // 11. 이미지에 있던 빈 사각형 (변동 없음)
-  Widget _buildFilterPlaceholder() {
+  // 11. 출석 빈도 섹션 (홈 탭 AttendanceStatusCard와 동일)
+  Widget _buildAttendanceFrequencySection() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        Text(
+          '출석 빈도:',
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+        ),
+        const SizedBox(width: 8),
+        _buildLegendBlock(0.2),
+        _buildLegendBlock(0.4),
+        _buildLegendBlock(0.6),
+        _buildLegendBlock(0.8),
+        _buildLegendBlock(1.0),
+      ],
+    );
+  }
+
+  Widget _buildLegendBlock(double intensity) {
     return Container(
-      height: 40,
+      width: 14,
+      height: 14,
+      margin: const EdgeInsets.only(right: 2),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF0F0F0)), // 매우 옅은 테두리
+        color: _mainOrange.withOpacity(intensity),
+        borderRadius: BorderRadius.circular(3),
       ),
     );
   }
@@ -157,9 +189,9 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Widget _buildContentArea() {
     // 모든 멤버 정보 및 더미 데이터 생성
     final List<Map<String, dynamic>> members = [
-      {'name': '김학생', 'role': '박사과정', 'percentage': '85 %', 'initial': '김', 'color': Colors.orange, 'records': _generateDummyData(30)},
-      {'name': '이연구', 'role': '석사과정', 'percentage': '92 %', 'initial': '이', 'color': Colors.orange, 'records': _generateDummyData(30)},
-      {'name': '박조교', 'role': '연구원', 'percentage': '78 %', 'initial': '박', 'color': Colors.orange, 'records': _generateDummyData(30)},
+      {'name': '김학생', 'role': '박사과정', 'percentage': '85 %', 'initial': '김', 'color': _mainOrange, 'records': _generateDummyData(30)},
+      {'name': '이연구', 'role': '석사과정', 'percentage': '92 %', 'initial': '이', 'color': _mainOrange, 'records': _generateDummyData(30)},
+      {'name': '박조교', 'role': '연구원', 'percentage': '78 %', 'initial': '박', 'color': _mainOrange, 'records': _generateDummyData(30)},
     ];
 
     if (_isListView) {
@@ -191,15 +223,15 @@ class _DailyStatusViewState extends State<DailyStatusView> {
       children: members.map((member) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 12.0), // Padding 간격 조정
-          child: Card( // 그리드 뷰에서도 카드를 사용하여 시각적으로 구분
+          child: Card(
+            color: const Color(0xFFFFFFFF),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade200), // 옅은 테두리 추가
             ),
             clipBehavior: Clip.antiAlias,
             child: ExpansionTile(
-              // ⭐ 타이틀: 멤버 정보
+              // ⭐ 타이틀: 멤버 정보 (리스트와 동일 스타일)
               title: Row(
                 children: [
                   CircleAvatar(
@@ -210,21 +242,33 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(member['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(member['role'] as String, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    member['percentage'] as String,
-                    style: TextStyle(
-                      color: member['color'] as Color,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(member['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text(member['role'] as String, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      ],
                     ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        member['percentage'] as String,
+                        style: TextStyle(
+                          color: member['color'] as Color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        '출석률',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -251,7 +295,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                           children: [
                             _buildSummaryBox('23일', '총 출석일'),
                             _buildSummaryBox('4일', '연속 출석'),
-                            _buildSummaryBox('85 %', '출석률'),
+                            _buildSummaryBox('85 %', '출석률', highlight: true),
                           ],
                         ),
                       ),
@@ -267,14 +311,13 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     );
   }
 
-// 2. 주간 그리드 부분을 별도 함수로 분리 (코드가 너무 길어져서)
+  // 2. 주간 그리드 부분을 별도 함수로 분리
   Widget _buildGridAttendanceArea(Map<String, dynamic> member) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF0F0F0)),
       ),
       child: Column(
         children: [
@@ -336,20 +379,27 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     );
   }
 
-  // 그리드 뷰 아래 요약 박스 헬퍼 (위치 이동)
-  Widget _buildSummaryBox(String value, String label) {
+  // 그리드 뷰 아래 요약 박스 헬퍼
+  Widget _buildSummaryBox(String value, String label, {bool highlight = false}) {
     return Container(
-      width: MediaQuery.of(context).size.width / 4, // 대략적인 너비
+      width: MediaQuery.of(context).size.width / 4,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF0F0F0)),
+        border: Border.all(color: Colors.grey.shade300, width: 1),
       ),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: highlight ? _mainOrange : Colors.black87,
+            ),
+          ),
+          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
         ],
       ),
     );
@@ -393,6 +443,7 @@ class _MemberAttendanceCardState extends State<MemberAttendanceCard> {
     final recordsToShow = _isSeeMoreClicked ? widget.allRecords : _recentRecords;
 
     return Card(
+      color: const Color(0xFFFFFFFF),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -409,8 +460,6 @@ class _MemberAttendanceCardState extends State<MemberAttendanceCard> {
         title: Row(
           children: [
             CircleAvatar(
-              // ⭐ withOpacity 대신 .withAlpha(int) 또는 Color.fromRGBO(r,g,b,a) 사용을 권장하지만,
-              // withOpacity를 사용해도 기능상 문제는 없습니다. 경고 무시 가능.
               backgroundColor: widget.color.withOpacity(0.2),
               child: Text(
                 widget.initial,
@@ -418,25 +467,35 @@ class _MemberAttendanceCardState extends State<MemberAttendanceCard> {
               ),
             ),
             const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(widget.role, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              widget.percentage,
-              style: TextStyle(
-                color: widget.color,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text(widget.role, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
               ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  widget.percentage,
+                  style: TextStyle(
+                    color: widget.color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  '출석률',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
             ),
           ],
         ),
-        trailing: const Icon(Icons.keyboard_arrow_down),
+        trailing: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade500, size: 24),
         childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           _buildHeaderRow(),
@@ -461,7 +520,7 @@ class _MemberAttendanceCardState extends State<MemberAttendanceCard> {
               _isSeeMoreClicked
                   ? '간략히 보기'
                   : '더 보기 (총 ${widget.allRecords.length}일)',
-              style: const TextStyle(color: Colors.grey),
+              style: const TextStyle(color: _mainOrange, fontWeight: FontWeight.w500),
             ),
           )
         ],
@@ -503,14 +562,14 @@ class _MemberAttendanceCardState extends State<MemberAttendanceCard> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isPresent ? Colors.green.shade50 : Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(12),
+                  color: isPresent ? const Color(0xFFE8F5E9) : Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   record.status,
                   style: TextStyle(
-                    color: isPresent ? Colors.green.shade700 : Colors.red.shade700,
-                    fontWeight: FontWeight.bold,
+                    color: isPresent ? const Color(0xFF2E7D32) : Colors.red.shade700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
                 ),

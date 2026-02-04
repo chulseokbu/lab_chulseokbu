@@ -28,7 +28,7 @@ class CustomBottomNavBar extends StatelessWidget {
         ),
         BottomNavigationBarItem(
           icon: Icon(currentIndex == 1 ? Icons.people_alt : Icons.people_alt_outlined),
-          label: '구성원',
+          label: '모임',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.show_chart),

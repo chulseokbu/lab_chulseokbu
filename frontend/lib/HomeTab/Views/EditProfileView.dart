@@ -176,6 +176,7 @@ class EditProfileDialog extends StatefulWidget {
   final String initialPhone;
   final String initialEmail;
   final Future<void> Function(String name, String studentId, String phone, String email) onSave;
+  final VoidCallback? onLogout;
 
   const EditProfileDialog({
     super.key,
@@ -184,6 +185,7 @@ class EditProfileDialog extends StatefulWidget {
     required this.initialPhone,
     required this.initialEmail,
     required this.onSave,
+    this.onLogout,
   });
 
   @override
@@ -319,7 +321,6 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () async {
-                      // 변경된 값을 onSave 콜백으로 전달
                       await widget.onSave(
                         nameController.text.trim(),
                         idController.text.trim(),
@@ -334,6 +335,26 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                   ),
                 ],
               ),
+              if (widget.onLogout != null) ...[
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      widget.onLogout!();
+                    },
+                    icon: const Icon(Icons.logout, size: 20),
+                    label: const Text('로그아웃'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
