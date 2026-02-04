@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/HomeTab/Views/InOutStateView.dart';
-import 'package:frontend/MemberTab/MemberStateView.dart';
 import 'package:frontend/TabBar/Shared_widgets.dart';
 import 'package:frontend/HomeTab/Views/NotificationView.dart';
 import 'package:frontend/HomeTab/Views/daily_status_view.dart';
 import 'package:frontend/HomeTab/Views/EditProfileView.dart';
 import 'package:frontend/HomeTab/AuthTab/AuthScreen.dart';
+import 'package:frontend/HomeTab/Views/AttendanceStatusCard.dart';
+
 void main() {
   runApp(const MyApp());
 }
 
 const BGC = Color(0xFFFFFFFF);
+const Color mainOrange = Color(0xFFF97316); // 메인 컬러
+const Color backgroundColor = Color(0xFFF9FAFB); // 화면 배경색
 
 
 class AuthGate extends StatefulWidget {
@@ -76,7 +79,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: '랩실 출석부',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: BGC),
+        colorScheme: ColorScheme.fromSeed(seedColor: mainOrange, brightness: Brightness.light),
       ),
       home: const AuthGate(),
     );
@@ -154,16 +157,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
           SizedBox(height: 16), // 위젯 간 간격
 
-          // 2. 출석 현황 위젯 자리
-          SizedBox(
-            height: 150,
-            child: Center(
-              child: Text(
-                '출석 현황 위젯 자리',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-              ),
-            ),
-          ),
+          // 2. 출석 현황 카드
+          const AttendanceStatusCard(),
 
           SizedBox(height: 16), // 위젯 간 간격
 
@@ -172,15 +167,9 @@ class _MyHomePageState extends State<MyHomePage> {
           // NotificationView에 높이를 제한했던 것처럼 여기서도 제한된 높이를 유지합니다.
           // 전체가 SingleChildScrollView 안에 있으므로, 이 위젯의 높이가 300을 초과하면
           // 바깥쪽 SingleChildScrollView가 스크롤됩니다.
-          SizedBox(
-            height: 600,
-            child: NotificationView(),
-          ),
+          const NotificationView(embedded: true),
 
-          SizedBox(height: 20),
-          // 만약 여기에 더 많은 내용이 있다면, 스크롤 가능합니다.
-          Center(child: Text('스크롤 확인용 추가 내용', style: TextStyle(fontSize: 14, color: Colors.blueGrey))),
-          SizedBox(height: 100), // 스크롤 테스트를 위한 여백
+          SizedBox(height: 100),
         ],
       ),
     ),
@@ -206,39 +195,46 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     // 현재 선택된 인덱스에 따라 AppBar의 타이틀을 변경할 수 있습니다.
-    String currentTitle = widget.title;
-    if (_selectedIndex == 1) {
-      currentTitle = '출석뷰'; // 구성원 탭을 눌렀을 때 타이틀 변경
-    }
+    String currentTitle = _selectedIndex == 0 ? '출석뷰' : (_selectedIndex == 1 ? '출석뷰' : widget.title);
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: BGC,
-        title: Text(currentTitle),
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        title: Row(
+          children: [
+            Icon(Icons.menu_book_rounded, color: mainOrange, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              currentTitle,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
         actions: <Widget>[
           GestureDetector(
             onTap: _showEditProfileDialog,
-
-            // 4번째 사진(프로필 아이콘)과 유사한 형태의 위젯을 구성합니다.
             child: Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // '김학생' 텍스트 (옵션, '출석뷰' 화면에선 보임)
-                  if (_selectedIndex == 1) // 구성원 탭일 때만 텍스트를 보여준다고 가정
-                    const Text(
-                      '김학생',
-                      style: TextStyle(fontSize: 16, color: Colors.black),
-                    ),
-                  const SizedBox(width: 8), // 텍스트와 아이콘 간 간격
-                  // 원형 프로필 아이콘 ('김')
-                  const CircleAvatar(
+                  Text(
+                    _currentName,
+                    style: const TextStyle(fontSize: 16, color: Colors.black87),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
                     radius: 18,
-                    backgroundColor: Color(0xFFE68840), // 오렌지색 계열 (이미지 참고)
+                    backgroundColor: mainOrange,
                     child: Text(
-                      '김',
-                      style: TextStyle(color: BGC, fontWeight: FontWeight.bold),
+                      _currentName.isNotEmpty ? _currentName[0] : '?',
+                      style: const TextStyle(color: BGC, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -246,7 +242,6 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
         ],
-        // 필요하다면 앱바의 Actions(오른쪽 상단)도 여기에 배치할 수 있습니다.
       ),
 
       // ⭐ 4. body에 현재 선택된 인덱스의 위젯을 표시합니다.

@@ -45,7 +45,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Widget build(BuildContext context) {
     // 4. AppBar, BottomNav 제거. SafeArea 추가
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9), // Scaffold 배경색
+      backgroundColor: const Color(0xFFF9FAFB), // Scaffold 배경색
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

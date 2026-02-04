@@ -32,12 +32,16 @@ class AlarmData {//final(변경불가) 함수들
   });
 }
 
+const Color _mainOrange = Color(0xFFF97316);
+
 // 알림 화면 전체를 구성하는 위젯
-class NotificationView extends StatelessWidget {//변하지 않음(정적) <-> StatefulWidget(동적)
-  const NotificationView({super.key});
+class NotificationView extends StatelessWidget {
+  const NotificationView({super.key, this.embedded = false});
+
+  /// 홈 탭에 카드 형태로 임베드할 때 true
+  final bool embedded;
 
   // 이 데이터는 실제로는 서버나 데이터베이스에서 받아와야 함
-  // 지금은 가짜데이터 사용중 //변경 불가능한 리스트로 직접 데이터를 만듦
   final List<AlarmData> mockAlarms = const [
     AlarmData(
       id: '1',
@@ -68,13 +72,43 @@ class NotificationView extends StatelessWidget {//변하지 않음(정적) <-> S
 
   @override
   Widget build(BuildContext context) {
+    if (embedded) {
+      return Card(
+        color: const Color(0xFFFFFFFF),
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '알림',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...mockAlarms.take(3).map((alarm) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: AlarmCard(alarm: alarm),
+                  )),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('알림 (테스트)', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('알림', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 1,
       ),
-      body: ListView.builder(//화면에 보이는 만큼만 위젯을 그림
+      body: ListView.builder(
         padding: const EdgeInsets.all(16.0),
         itemCount: mockAlarms.length,
         itemBuilder: (context, index) {
@@ -147,8 +181,9 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
 
   @override
   Widget build(BuildContext context) {//알림 카드 디자인
-    final Color cardColor = _currentStatus == AlarmStatus.active ? const Color(0xFFFFF4E0) : Colors.white;
-    final Color borderColor = _currentStatus == AlarmStatus.active ? const Color(0xFFFFCC80) : Colors.transparent;
+    // 아직 응답 안 했을 때(active, pending): FED7AA / 응답 완료 시: F9FAFB
+    final bool needsResponse = _currentStatus == AlarmStatus.active || _currentStatus == AlarmStatus.pending;
+    final Color cardColor = needsResponse ? const Color(0xFFFFF7ED) : const Color(0xFFF9FAFB);
 
     return Card(
       color: cardColor,
@@ -156,7 +191,6 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
       margin: const EdgeInsets.only(bottom: 12.0),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12.0),
-        side: BorderSide(color: borderColor, width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -212,14 +246,14 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
             LinearProgressIndicator(
               value: _remainingTime.inSeconds / _totalDuration.inSeconds,
               backgroundColor: Colors.grey[300],
-              color: const Color(0xFFFFA726),
+              color: _mainOrange,
               minHeight: 6,
               borderRadius: BorderRadius.circular(3),
             ),
             const SizedBox(height: 6),
             Text(
               '${_remainingTime.inMinutes}분 ${(_remainingTime.inSeconds % 60).toString().padLeft(2, '0')}초 남음',
-              style: const TextStyle(color: Color(0xFFE65100), fontWeight: FontWeight.bold),
+              style: const TextStyle(color: _mainOrange, fontWeight: FontWeight.bold),
             ),
           ],
         );
@@ -239,7 +273,6 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
           style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold, fontSize: 15),
         );
       case AlarmStatus.pending:
-      default:
         return const SizedBox.shrink();
     }
   }
