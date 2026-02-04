@@ -187,39 +187,61 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
 
     return Card(
       color: cardColor,
-      elevation: 2,
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12.0),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12.0),
+        side: BorderSide(color: Colors.grey.shade300, width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1행: 종 아이콘 + 제목 (+ active일 때 예/아니오 버튼)
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Icon(
-                  _currentStatus == AlarmStatus.timedOut ? Icons.warning_amber_rounded : Icons.notifications_none_outlined,
-                  color: _currentStatus == AlarmStatus.timedOut ? Colors.red : Colors.grey.shade600,
-                  size: 20,
+                  _currentStatus == AlarmStatus.timedOut
+                      ? Icons.warning_amber_rounded
+                      : Icons.notifications_none_outlined,
+                  color: _currentStatus == AlarmStatus.timedOut
+                      ? Colors.red
+                      : (needsResponse ? _mainOrange : Colors.grey.shade600),
+                  size: 22,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '랩실에 계신가요?',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '랩실에 계신가요?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
                 ),
-                const Spacer(),
-                Text(widget.alarm.time, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                if (_currentStatus == AlarmStatus.active) ...[
+                  _buildResponseButton(icon: Icons.check, color: Colors.green, onPressed: _onRespondYes),
+                  const SizedBox(width: 10),
+                  _buildResponseButton(icon: Icons.close, color: Colors.red, onPressed: _onRespondNo),
+                ],
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 12),
+            // 2행: 시간 (제목과 왼쪽 정렬)
             Padding(
-              padding: const EdgeInsets.only(left: 28),
-              child: Text(widget.alarm.date, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+              padding: const EdgeInsets.only(left: 32), // 아이콘(22) + 간격(10) = 32
+              child: Text(
+                widget.alarm.time,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
             ),
+            const SizedBox(height: 12),
+            // 3행: 응답 상태 또는 프로그레스바
             Padding(
-              padding: const EdgeInsets.only(left: 28, top: 12),
+              padding: const EdgeInsets.only(left: 32),
               child: _buildStatusSection(),
             ),
           ],
@@ -231,18 +253,10 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
 //텍스트들을 배치
   Widget _buildStatusSection() {//_currentStatus값에 따라 완전히 다른 ui를 반환
     switch (_currentStatus) {
-      case AlarmStatus.active://활성 상태
+      case AlarmStatus.active://활성 상태 (버튼은 1행에 있음)
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                _buildResponseButton(icon: Icons.check, color: Colors.green, onPressed: _onRespondYes),
-                const SizedBox(width: 12),
-                _buildResponseButton(icon: Icons.close, color: Colors.red, onPressed: _onRespondNo),
-              ],
-            ),
-            const SizedBox(height: 12),
             LinearProgressIndicator(
               value: _remainingTime.inSeconds / _totalDuration.inSeconds,
               backgroundColor: Colors.grey[300],
@@ -250,27 +264,45 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
               minHeight: 6,
               borderRadius: BorderRadius.circular(3),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               '${_remainingTime.inMinutes}분 ${(_remainingTime.inSeconds % 60).toString().padLeft(2, '0')}초 남음',
-              style: const TextStyle(color: _mainOrange, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
             ),
           ],
         );
       case AlarmStatus.respondedYes://예 응답
-        return const Text(
-          '✓ 응답함: 랩실에 있음',
-          style: TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold, fontSize: 15),
+        return Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green.shade700, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '응답함: 랩실에 있음',
+              style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         );
       case AlarmStatus.respondedNo://아니요 응답
-        return const Text(
-          '✓ 응답함: 랩실에 없음',
-          style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold, fontSize: 15),
+        return Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.red.shade700, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '응답함: 랩실에 없음',
+              style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         );
       case AlarmStatus.timedOut:
-        return const Text(
-          '! 자동 퇴실 처리됨 (무응답)',
-          style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold, fontSize: 15),
+        return Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '자동 퇴실 처리됨 (무응답)',
+              style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         );
       case AlarmStatus.pending:
         return const SizedBox.shrink();
@@ -279,20 +311,20 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
 //예, 아니요 버튼을 디자인은 같게, 기능과 아이콘, 색상만 다르게 만듦
   Widget _buildResponseButton({required IconData icon, required Color color, required VoidCallback onPressed}) {
     return Material(
-      color: color.withOpacity(0.1),
+      color: color.withOpacity(0.15),
       shape: const CircleBorder(),
       child: InkWell(
         onTap: onPressed,
         customBorder: const CircleBorder(),
         splashColor: color.withOpacity(0.3),
         child: Container(
-          width: 44,
-          height: 44,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: color.withOpacity(0.5), width: 1.5),
           ),
-          child: Icon(icon, color: color, size: 24),
+          child: Icon(icon, color: color, size: 20),
         ),
       ),
     );
