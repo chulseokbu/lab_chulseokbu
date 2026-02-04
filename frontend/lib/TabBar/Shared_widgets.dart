@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 
-const Color _mainOrange = Color(0xFFF97316);
-
-// ⭐ BottomNavigationBar 위젯을 별도의 StatelessWidget으로 분리
+/// 하단 네비게이션 바
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int)? onItemSelected;
@@ -16,8 +15,8 @@ class CustomBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
-      backgroundColor: const Color(0xFFFFFFFF),
-      selectedItemColor: _mainOrange,
+      backgroundColor: AppColors.surface,
+      selectedItemColor: AppColors.primary,
       unselectedItemColor: Colors.grey,
       // 선택 이벤트 핸들러 추가 (탭 전환 로직이 있다면 사용)
       onTap: onItemSelected,

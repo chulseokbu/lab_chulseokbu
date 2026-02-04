@@ -1,29 +1,6 @@
 import 'package:flutter/material.dart';
-
-const Color _mainOrange = Color(0xFFF97316);
-
-/// 잔류 현황 멤버 데이터 (목업)
-class RetentionMember {
-  final String name;
-  final String role;
-  final String initial;
-  final bool isPresent;
-  final String? checkIn; // "09:15"
-  final String? lastExit; // "어제 18:30" or "오늘 11:20"
-  final String? status; // "작업 중", "휴식 중", "회의 중"
-  final String? duration; // "3시간 45분"
-
-  const RetentionMember({
-    required this.name,
-    required this.role,
-    required this.initial,
-    required this.isPresent,
-    this.checkIn,
-    this.lastExit,
-    this.status,
-    this.duration,
-  });
-}
+import 'package:frontend/core/theme/app_colors.dart';
+import 'package:frontend/models/retention_member.dart';
 
 /// 잔류현황 탭 화면
 class RetentionStatusView extends StatefulWidget {
@@ -176,7 +153,7 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _mainOrange.withOpacity(0.2),
+                      color: AppColors.primary.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -184,7 +161,7 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: _mainOrange,
+                        color: AppColors.primary,
                       ),
                     ),
                   ),
@@ -196,12 +173,12 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _mainOrange.withOpacity(0.15),
+                  color: AppColors.primary.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.schedule_rounded, color: _mainOrange, size: 32),
+                    Icon(Icons.schedule_rounded, color: AppColors.primary, size: 32),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -263,7 +240,7 @@ class _MeetingChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? _mainOrange : Colors.white,
+            color: isSelected ? AppColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(22),
             border: isSelected ? null : Border.all(color: Colors.grey.shade300),
             boxShadow: [
@@ -281,7 +258,7 @@ class _MeetingChip extends StatelessWidget {
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : _mainOrange,
+                  color: isSelected ? Colors.white : AppColors.primary,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -326,11 +303,11 @@ class _MemberRetentionCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: _mainOrange.withOpacity(0.2),
+                backgroundColor: AppColors.primary.withOpacity(0.2),
                 child: Text(
                   member.initial,
                   style: const TextStyle(
-                    color: _mainOrange,
+                    color: AppColors.primary,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -419,8 +396,8 @@ class _MemberRetentionCard extends StatelessWidget {
 
   Widget _buildStatusPill(String status) {
     final isBreak = status == '휴식 중';
-    final bgColor = isBreak ? _mainOrange.withOpacity(0.2) : Colors.purple.withOpacity(0.15);
-    final textColor = isBreak ? _mainOrange : Colors.purple.shade700;
+    final bgColor = isBreak ? AppColors.primary.withOpacity(0.2) : Colors.purple.withOpacity(0.15);
+    final textColor = isBreak ? AppColors.primary : Colors.purple.shade700;
     final icon = isBreak ? Icons.coffee : Icons.person;
 
     return Container(

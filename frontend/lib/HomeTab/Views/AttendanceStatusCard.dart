@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-// 메인 컬러 F97316
-const Color _mainOrange = Color(0xFFF97316);
+import 'package:frontend/core/theme/app_colors.dart';
 
 /// 출석 현황 카드 - 월별 출석 그리드, 출석 빈도 범례, 이번 달 요약
 class AttendanceStatusCard extends StatelessWidget {
@@ -81,7 +79,7 @@ class AttendanceStatusCard extends StatelessWidget {
       height: 14,
       margin: const EdgeInsets.only(right: 2),
       decoration: BoxDecoration(
-        color: _mainOrange.withOpacity(intensity),
+        color: AppColors.primary.withOpacity(intensity),
         borderRadius: BorderRadius.circular(3),
       ),
     );
@@ -115,7 +113,7 @@ class AttendanceStatusCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: _mainOrange,
+                        color: AppColors.primary,
                       ),
                     ),
                     ...weekLabels.map((label) => Padding(
@@ -166,7 +164,7 @@ class AttendanceStatusCard extends StatelessWidget {
                               height: 18,
                               decoration: BoxDecoration(
                                 color: intensity > 0
-                                    ? _mainOrange.withOpacity(0.2 + intensity * 0.8)
+                                    ? AppColors.primary.withOpacity(0.2 + intensity * 0.8)
                                     : Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(4),
                               ),
@@ -244,7 +242,7 @@ class AttendanceStatusCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: highlight ? _mainOrange : Colors.black87,
+              color: highlight ? AppColors.primary : Colors.black87,
             ),
           ),
           const SizedBox(height: 4),

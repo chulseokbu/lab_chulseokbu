@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 
-// 랩실 상태를 정의하는 enum
+/// 랩실 상태
 enum LabStatus { inLab, outLab }
-
-const Color White = Color(0xFFFFFFFF);
-const Color Grey = Color(0xFF9CA3AF);
-const Color LightGrey = Color(0xFFE5E7EB); // 비활성화된 버튼 배경색
-const Color mainOrange = Color(0xFFF97316); // 메인 컬러
 
 // 화면의 한 부분을 구성하는 메인 상태 관리 위젯
 class LabStatusCard extends StatefulWidget {
@@ -26,8 +22,7 @@ class _LabStatusCardState extends State<LabStatusCard> {
       setState(() {
         _currentStatus = newStatus;
       });
-      // 실제 로직에서는 여기에 서버 통신 등을 추가합니다.
-      print('Status updated to: ${_currentStatus == LabStatus.inLab ? 'In Lab' : 'Out Lab'}');
+      // TODO: 서버 연동 시 AttendanceService.checkIn/checkOut 호출
     }
   }
 
@@ -93,7 +88,7 @@ class _CurrentStatus extends StatelessWidget {
     final isInLab = status == LabStatus.inLab;
     final statusText = isInLab ? '랩실 안에 있습니다' : '랩실 밖에 있습니다';
     final statusDetail = isInLab ? '마지막 체크인: 오늘 09:45' : '마지막 체크아웃: 어제 18:30';
-    final statusColor = isInLab ? Colors.green.shade600 : Grey;
+    final statusColor = isInLab ? Colors.green.shade600 : AppColors.grey;
 
     // 아이콘과 텍스트를 가로로 배치
     return Row(
@@ -115,7 +110,7 @@ class _CurrentStatus extends StatelessWidget {
             ),
             Text(
                 statusDetail,
-                style: const TextStyle(fontSize: 11.9, color: Grey)
+                style: const TextStyle(fontSize: 11.9, color: AppColors.grey)
             ),
           ],
         ),
@@ -152,8 +147,8 @@ class _InOutButtons extends StatelessWidget {
                     icon: const Icon(Icons.arrow_forward_ios, size: 16),
                     label: const Text('들어오기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: mainOrange,
-                      foregroundColor: White,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.surface,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -164,8 +159,8 @@ class _InOutButtons extends StatelessWidget {
                     icon: const Icon(Icons.arrow_forward_ios, size: 16),
                     label: const Text('들어오기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Grey,
-                      side: const BorderSide(color: LightGrey),
+                      foregroundColor: AppColors.grey,
+                      side: const BorderSide(color: AppColors.lightGrey),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -182,8 +177,8 @@ class _InOutButtons extends StatelessWidget {
                     icon: const Icon(Icons.arrow_back_ios, size: 16),
                     label: const Text('나가기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: mainOrange,
-                      foregroundColor: White,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.surface,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -194,8 +189,8 @@ class _InOutButtons extends StatelessWidget {
                     icon: const Icon(Icons.arrow_back_ios, size: 16),
                     label: const Text('나가기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Grey,
-                      side: const BorderSide(color: LightGrey),
+                      foregroundColor: AppColors.grey,
+                      side: const BorderSide(color: AppColors.lightGrey),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -226,15 +221,15 @@ class _ManualToggle extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('직접 상태 변경', style: TextStyle(fontSize: 14, color: Grey)),
+        const Text('직접 상태 변경', style: TextStyle(fontSize: 14, color: AppColors.grey)),
         Switch(
           value: isInLab, // 토글 ON = 랩실 안
           onChanged: (bool newValue) {
             onStatusChanged(newValue ? LabStatus.inLab : LabStatus.outLab);
           },
-          activeTrackColor: mainOrange.withOpacity(0.5),
-          activeThumbColor: White,
-          inactiveThumbColor: White,
+          activeTrackColor: AppColors.primary.withValues(alpha: 0.5),
+          activeThumbColor: AppColors.surface,
+          inactiveThumbColor: AppColors.surface,
           inactiveTrackColor: const Color(0xFFD1D5DB),
           trackOutlineWidth: WidgetStateProperty.all(0),
           trackOutlineColor: WidgetStateProperty.all(Colors.transparent),

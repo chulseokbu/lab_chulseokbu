@@ -1,21 +1,6 @@
 import 'package:flutter/material.dart';
-
-const Color _mainOrange = Color(0xFFF97316);
-
-// 1. 출석 기록을 위한 간단한 데이터 모델 (변동 없음)
-class AttendanceRecord {
-  final String date;
-  final String status;
-  final String checkIn;
-  final String checkOut;
-//record
-  AttendanceRecord({
-    required this.date,
-    required this.status,
-    required this.checkIn,
-    required this.checkOut,
-  });
-}
+import 'package:frontend/core/theme/app_colors.dart';
+import 'package:frontend/models/attendance_record.dart';
 
 // 2. 이 파일의 메인 위젯 (StatefulWidget) (변동 없음)
 class DailyStatusView extends StatefulWidget {
@@ -179,7 +164,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
       height: 14,
       margin: const EdgeInsets.only(right: 2),
       decoration: BoxDecoration(
-        color: _mainOrange.withOpacity(intensity),
+        color: AppColors.primary.withOpacity(intensity),
         borderRadius: BorderRadius.circular(3),
       ),
     );
@@ -189,9 +174,9 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Widget _buildContentArea() {
     // 모든 멤버 정보 및 더미 데이터 생성
     final List<Map<String, dynamic>> members = [
-      {'name': '김학생', 'role': '박사과정', 'percentage': '85 %', 'initial': '김', 'color': _mainOrange, 'records': _generateDummyData(30)},
-      {'name': '이연구', 'role': '석사과정', 'percentage': '92 %', 'initial': '이', 'color': _mainOrange, 'records': _generateDummyData(30)},
-      {'name': '박조교', 'role': '연구원', 'percentage': '78 %', 'initial': '박', 'color': _mainOrange, 'records': _generateDummyData(30)},
+      {'name': '김학생', 'role': '박사과정', 'percentage': '85 %', 'initial': '김', 'color': AppColors.primary, 'records': _generateDummyData(30)},
+      {'name': '이연구', 'role': '석사과정', 'percentage': '92 %', 'initial': '이', 'color': AppColors.primary, 'records': _generateDummyData(30)},
+      {'name': '박조교', 'role': '연구원', 'percentage': '78 %', 'initial': '박', 'color': AppColors.primary, 'records': _generateDummyData(30)},
     ];
 
     if (_isListView) {
@@ -396,7 +381,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: highlight ? _mainOrange : Colors.black87,
+              color: highlight ? AppColors.primary : Colors.black87,
             ),
           ),
           Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
@@ -520,7 +505,7 @@ class _MemberAttendanceCardState extends State<MemberAttendanceCard> {
               _isSeeMoreClicked
                   ? '간략히 보기'
                   : '더 보기 (총 ${widget.allRecords.length}일)',
-              style: const TextStyle(color: _mainOrange, fontWeight: FontWeight.w500),
+              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w500),
             ),
           )
         ],

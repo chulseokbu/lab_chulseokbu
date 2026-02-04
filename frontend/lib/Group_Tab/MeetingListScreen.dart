@@ -1,25 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:frontend/core/theme/app_colors.dart';
+import 'package:frontend/Group_Tab/widgets/create_meeting_dialog.dart';
+import 'package:frontend/Group_Tab/widgets/meeting_action_card.dart';
+import 'package:frontend/Group_Tab/widgets/meeting_card.dart';
 import 'package:frontend/HomeTab/Views/daily_status_view.dart';
-
-const Color _mainOrange = Color(0xFFF97316);
-const Color _backgroundColor = Color(0xFFF9FAFB);
-
-/// 모임 데이터 모델
-class Meeting {
-  final String code;
-  String name;
-  final int memberCount;
-  final String createdAt;
-
-  Meeting({
-    required this.code,
-    required this.name,
-    required this.memberCount,
-    required this.createdAt,
-  });
-}
+import 'package:frontend/models/meeting.dart';
 
 /// 모임 리스트 메인 화면 (모임 탭 클릭 시 첫 화면)
 class MeetingListScreen extends StatefulWidget {
@@ -67,7 +53,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _CreateMeetingDialog(
+      builder: (context) => CreateMeetingDialog(
         initialName: 'AI 연구실',
         meetingCode: generatedCode,
         onCancel: () => Navigator.pop(context),
@@ -132,7 +118,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                 }
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: _mainOrange),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('참여'),
           ),
         ],
@@ -143,7 +129,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
@@ -173,7 +159,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _ActionCard(
+                    child: MeetingActionCard(
                       icon: Icons.arrow_forward_ios,
                       label: '모임 참여',
                       isPrimary: false,
@@ -182,7 +168,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _ActionCard(
+                    child: MeetingActionCard(
                       icon: Icons.add,
                       label: '모임 생성',
                       isPrimary: true,
@@ -196,7 +182,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               // 모임 리스트
               ..._meetings.map((meeting) => Padding(
                     padding: const EdgeInsets.only(bottom: 12.0),
-                    child: _MeetingCard(
+                    child: MeetingCard(
                       meeting: meeting,
                       onTap: () {
                         Navigator.push(
@@ -211,339 +197,6 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               const SizedBox(height: 100),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 액션 카드 (모임 참여 / 모임 생성)
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isPrimary;
-  final VoidCallback onTap;
-
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.isPrimary,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: isPrimary ? _mainOrange : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: isPrimary ? null : Border.all(color: Colors.grey.shade300, width: 2, strokeAlign: BorderSide.strokeAlignInside),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isPrimary ? Colors.white : Colors.grey.shade600,
-                size: 24,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isPrimary ? Colors.white : Colors.black87,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 모임 카드
-class _MeetingCard extends StatelessWidget {
-  final Meeting meeting;
-  final VoidCallback onTap;
-
-  const _MeetingCard({required this.meeting, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      meeting.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.people_outline, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${meeting.memberCount}명',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '생성일: ${meeting.createdAt}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  meeting.code,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 모임 생성 팝업 다이얼로그 (두 번째 이미지)
-class _CreateMeetingDialog extends StatefulWidget {
-  final String initialName;
-  final String meetingCode;
-  final VoidCallback onCancel;
-  final void Function(String name) onCreate;
-
-  const _CreateMeetingDialog({
-    required this.initialName,
-    required this.meetingCode,
-    required this.onCancel,
-    required this.onCreate,
-  });
-
-  @override
-  State<_CreateMeetingDialog> createState() => _CreateMeetingDialogState();
-}
-
-class _CreateMeetingDialogState extends State<_CreateMeetingDialog> {
-  late TextEditingController _nameController;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.initialName);
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  void _copyCode() {
-    Clipboard.setData(ClipboardData(text: widget.meetingCode));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('모임 코드가 복사되었습니다.'), duration: Duration(seconds: 2)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 제목 + 닫기
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '모임 생성',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                IconButton(
-                  onPressed: widget.onCancel,
-                  icon: Icon(Icons.close, color: Colors.grey.shade600),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // 모임 이름
-            const Text(
-              '모임 이름',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                hintText: 'AI 연구실',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _mainOrange, width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // 모임 코드
-            const Text(
-              '모임 코드',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _mainOrange, width: 2),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.meetingCode,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _copyCode,
-                    icon: const Icon(Icons.copy),
-                    color: _mainOrange,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '이 코드를 공유하여 다른 사람들을 초대하세요',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 28),
-
-            // 취소 / 생성하기 버튼
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: widget.onCancel,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: const Text('취소'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final name = _nameController.text.trim();
-                      if (name.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('모임 이름을 입력해주세요.')),
-                        );
-                        return;
-                      }
-                      widget.onCreate(name);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _mainOrange,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('생성하기'),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

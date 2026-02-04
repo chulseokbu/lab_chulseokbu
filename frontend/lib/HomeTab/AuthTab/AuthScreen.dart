@@ -1,12 +1,6 @@
-// auth_screens.dart 파일 내용
-
-import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-// 이미지에서 볼 수 있는 주황색 버튼 색상
-const Color _orangeColor = Color(0xFFE68840);
-const Color _hintTextColor = Color(0xFFCCCCCC);
-const Color _backgroundColor = Color(0xFFFFFFFF);
-const Color _lightOrangeBackground = Color(0xFFFFF7F0);
+import 'package:flutter/material.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 // --- 1. 로그인 화면 ---
 class LoginScreen extends StatelessWidget {
   const LoginScreen({
@@ -22,7 +16,7 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       // 💡 수정 1: 전체 Scaffold의 배경색을 연한 주황색 계열로 변경
-      backgroundColor: _lightOrangeBackground,
+      backgroundColor: AppColors.authBackground,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20.0), // 좌우 패딩 조정
@@ -31,7 +25,7 @@ class LoginScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               // 로고 및 제목
-              const Icon(Icons.menu_book, size: 60, color: _orangeColor),
+              const Icon(Icons.menu_book, size: 60, color: AppColors.primaryAlt),
               const SizedBox(height: 8),
               const Text(
                 '랩실 출석부',
@@ -47,7 +41,7 @@ class LoginScreen extends StatelessWidget {
 
               // 💡 수정 2: 로그인 폼 부분을 흰색 Card로 감싸서 이미지를 재현
               Card(
-                color: _backgroundColor, // 카드 배경색을 흰색으로 지정
+                color: AppColors.surface, // 카드 배경색을 흰색으로 지정
                 elevation: 4, // 그림자 효과
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15.0),
@@ -64,7 +58,7 @@ class LoginScreen extends StatelessWidget {
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
                           hintText: 'example@university.ac.kr',
-                          hintStyle: TextStyle(color: _hintTextColor),
+                          hintStyle: TextStyle(color: AppColors.textHint),
                           filled: true,
                           fillColor: Colors.white, // 배경색이 흰색일 때 대비를 위해 유지
                           border: OutlineInputBorder(
@@ -86,7 +80,7 @@ class LoginScreen extends StatelessWidget {
                         obscureText: true,
                         decoration: InputDecoration(
                           hintText: '비밀번호를 입력하세요',
-                          hintStyle: TextStyle(color: _hintTextColor),
+                          hintStyle: TextStyle(color: AppColors.textHint),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -104,8 +98,8 @@ class LoginScreen extends StatelessWidget {
                       ElevatedButton(
                         onPressed: onLoginSuccess,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _orangeColor,
-                          foregroundColor: _backgroundColor,
+                          backgroundColor: AppColors.primaryAlt,
+                          foregroundColor: AppColors.surface,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
@@ -124,7 +118,7 @@ class LoginScreen extends StatelessWidget {
                               TextSpan(
                                 text: '회원가입',
                                 style: const TextStyle(
-                                  color: _orangeColor,
+                                  color: AppColors.primaryAlt,
                                   fontWeight: FontWeight.bold,
                                   decoration: TextDecoration.underline, // 옵션: 밑줄 추가
                                 ),
@@ -208,16 +202,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
           color: Colors.black,
         ),
         title: const Text('회원가입', style: TextStyle(color: Colors.black)),
-        backgroundColor: _lightOrangeBackground,
+        backgroundColor: AppColors.authBackground,
       ),
-      backgroundColor: _lightOrangeBackground, // 수정: 배경색 _backgroundColor -> _lightOrangeBackground
+      backgroundColor: AppColors.authBackground, // 수정: 배경색 AppColors.surface -> AppColors.authBackground
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             // ... (앱 로고 및 제목)
-            const Icon(Icons.menu_book, size: 60, color: _orangeColor),
+            const Icon(Icons.menu_book, size: 60, color: AppColors.primaryAlt),
             const SizedBox(height: 16),
             const Text(
               '회원가입',
@@ -233,7 +227,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
             // 입력 폼을 흰색 카드로 감싸서 이미지 디자인 재현
             Card(
-              color: _backgroundColor,
+              color: AppColors.surface,
               elevation: 4,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15.0),
@@ -294,8 +288,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ElevatedButton(
               onPressed: _validateAndSubmit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _orangeColor,
-                foregroundColor: _backgroundColor,
+                backgroundColor: AppColors.primaryAlt,
+                foregroundColor: AppColors.surface,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -318,8 +312,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     String? helperText,
     bool obscureText = false,
   }) {
-    const Color _orangeColor = Color(0xFFE68840); // _buildInputField 내에서도 사용하기 위해 재정의 혹은 상단 const 사용
-
     // 오류가 있을 경우 빨간색 테두리
     final borderColor = isValid ? Colors.grey : Colors.red;
 
@@ -338,7 +330,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             obscureText: obscureText,
             decoration: InputDecoration(
               hintText: hintText,
-              hintStyle: const TextStyle(color: _hintTextColor),
+              hintStyle: const TextStyle(color: AppColors.textHint),
               filled: true,
               fillColor: Colors.white,
               // 💡 테두리 색상을 isValid 상태에 따라 변경
@@ -353,7 +345,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: const BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(
-                  color: isValid ? _orangeColor : Colors.red,
+                  color: isValid ? AppColors.primaryAlt : Colors.red,
                   width: 1.0,
                 ),
               ),
