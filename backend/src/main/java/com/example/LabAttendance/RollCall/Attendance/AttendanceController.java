@@ -2,6 +2,7 @@ package com.example.LabAttendance.RollCall.Attendance;
 
 import com.example.LabAttendance.RollCall.InOut.Dto.CheckInDto;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckInException;
+import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckOutException;
 import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayException;
 import com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse;
 import com.example.LabAttendance.RollCall.global.ResponneType.NoDataApiResponse;
@@ -223,7 +224,7 @@ public class AttendanceController {
         } catch (NotAttendanceTodayException e) {
             return ResponseEntity.status(400)
                     .body(NoDataApiResponse.failure("체크인 먼저 진행해주세요"));
-        } catch (AlreadyCheckInException e) {
+        } catch (AlreadyCheckOutException e) {
             return ResponseEntity.status(400)
                     .body(NoDataApiResponse.failure(e.getMessage()));
         } catch (EntityNotFoundException e) {

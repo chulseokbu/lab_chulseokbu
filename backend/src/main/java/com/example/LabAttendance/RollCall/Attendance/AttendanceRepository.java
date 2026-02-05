@@ -9,7 +9,13 @@ import java.util.Optional;
 
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
-    Optional<Attendance> findByIdAndDate(Long id, LocalDate date);
+    @Query("""
+    select a
+    from Attendance a
+    where a.member.id = :memberId
+      and a.date = :date
+    """)
+    Optional<Attendance> findByMemberIdAndDate(Long memberId, LocalDate date);
 
     List<Attendance> findByMemberIdAndDateBetweenOrderByDateAsc(
             Long memberId,
