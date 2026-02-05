@@ -40,6 +40,23 @@ Authorization: Bearer <accessToken>
 - **최근 30일 체류시간**: `GET /lab/stay/month`
   - 각 항목: `{ "date": "YYYY-MM-DD", "duration": "3시간 45분", ... }`
 
+## 모임(그룹) 기능 (추가)
+
+모임 단위로 여러 구성원의 출석/체류를 조회하기 위한 API입니다.
+
+- **내 모임 목록**: `GET /lab/meetings`
+- **모임 생성(서버가 6자리 코드 생성)**: `POST /lab/meetings`
+  - Request: `{ "name": "AI 연구실" }`
+  - Response(data): `{ "id": 1, "code": "A1B2C3", "name": "...", "memberCount": 1, "createdAt": "YYYY-MM-DD" }`
+- **모임 참여(코드 입력)**: `POST /lab/meetings/join`
+  - Request: `{ "code": "A1B2C3" }`
+- **모임 잔류 현황(오늘)**: `GET /lab/meetings/{meetingId}/retention`
+  - 각 항목: `{ "memberId": 1, "name": "Tom", "isPresent": true, "checkIn": "09:15", "lastExit": "YYYY-MM-DD HH:mm", "duration": "3시간 45분" }`
+- **모임 최근 7일 체크인/체크아웃**: `GET /lab/meetings/{meetingId}/stay/week`
+  - 각 항목: `{ "memberId": 1, "name": "Tom", "records": [ { "date":"YYYY-MM-DD", "checkIn":"HH:mm", "checkOut":"HH:mm" } ] }`
+- **모임 최근 30일 체류시간**: `GET /lab/meetings/{meetingId}/stay/month`
+  - 각 항목: `{ "memberId": 1, "name": "Tom", "records": [ { "date":"YYYY-MM-DD", "duration":"3시간 45분", ... } ] }`
+
 ## 참고
 
 - Flutter Web을 위해 **CORS는 허용**하도록 설정되어 있습니다.

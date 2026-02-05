@@ -2,6 +2,7 @@ package com.example.LabAttendance.RollCall.Attendance;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -35,6 +36,32 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
             Long memberId,
             LocalDate startDate,
             LocalDate endDate
+    );
+
+    @Query("""
+    select distinct a
+    from Attendance a
+    left join fetch a.inOuts io
+    where a.member.id in :memberIds
+      and a.date between :startDate and :endDate
+    """)
+    List<Attendance> findByMemberIdsAndDateBetweenWithInOuts(
+            @Param("memberIds") List<Long> memberIds,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    @Query("""
+    select a
+    from Attendance a
+    where a.member.id in :memberIds
+      and a.date between :startDate and :endDate
+    order by a.member.id asc, a.date asc
+    """)
+    List<Attendance> findByMemberIdsAndDateBetween(
+            @Param("memberIds") List<Long> memberIds,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
     );
 
 

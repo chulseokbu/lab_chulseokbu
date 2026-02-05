@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.List;
 
 @Repository
@@ -21,6 +22,24 @@ public interface InOutRepository extends JpaRepository<InOut, Long> {
     """)
     List<InOut> findLast7DaysInOuts(
             @Param("memberId") Long memberId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    Optional<InOut> findTopByAttendance_Member_IdAndEndTimeIsNotNullOrderByAttendance_DateDescEndTimeDesc(
+            Long memberId
+    );
+
+    @Query("""
+    select io
+    from InOut io
+    join io.attendance a
+    where a.member.id in :memberIds
+      and a.date between :startDate and :endDate
+    order by a.member.id asc, a.date desc, io.startTime asc
+    """)
+    List<InOut> findInOutsForMembersBetween(
+            @Param("memberIds") List<Long> memberIds,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
