@@ -32,12 +32,16 @@ class AlarmData {//final(변경불가) 함수들
   });
 }
 
+const Color _mainOrange = Color(0xFFF97316);
+
 // 알림 화면 전체를 구성하는 위젯
-class NotificationView extends StatelessWidget {//변하지 않음(정적) <-> StatefulWidget(동적)
-  const NotificationView({super.key});
+class NotificationView extends StatelessWidget {
+  const NotificationView({super.key, this.embedded = false});
+
+  /// 홈 탭에 카드 형태로 임베드할 때 true
+  final bool embedded;
 
   // 이 데이터는 실제로는 서버나 데이터베이스에서 받아와야 함
-  // 지금은 가짜데이터 사용중 //변경 불가능한 리스트로 직접 데이터를 만듦
   final List<AlarmData> mockAlarms = const [
     AlarmData(
       id: '1',
@@ -68,13 +72,43 @@ class NotificationView extends StatelessWidget {//변하지 않음(정적) <-> S
 
   @override
   Widget build(BuildContext context) {
+    if (embedded) {
+      return Card(
+        color: const Color(0xFFFFFFFF),
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '알림',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...mockAlarms.take(3).map((alarm) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: AlarmCard(alarm: alarm),
+                  )),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('알림 (테스트)', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('알림', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 1,
       ),
-      body: ListView.builder(//화면에 보이는 만큼만 위젯을 그림
+      body: ListView.builder(
         padding: const EdgeInsets.all(16.0),
         itemCount: mockAlarms.length,
         itemBuilder: (context, index) {
@@ -147,45 +181,67 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
 
   @override
   Widget build(BuildContext context) {//알림 카드 디자인
-    final Color cardColor = _currentStatus == AlarmStatus.active ? const Color(0xFFFFF4E0) : Colors.white;
-    final Color borderColor = _currentStatus == AlarmStatus.active ? const Color(0xFFFFCC80) : Colors.transparent;
+    // 아직 응답 안 했을 때(active, pending): FED7AA / 응답 완료 시: F9FAFB
+    final bool needsResponse = _currentStatus == AlarmStatus.active || _currentStatus == AlarmStatus.pending;
+    final Color cardColor = needsResponse ? const Color(0xFFFFF7ED) : const Color(0xFFF9FAFB);
 
     return Card(
       color: cardColor,
-      elevation: 2,
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12.0),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12.0),
-        side: BorderSide(color: borderColor, width: 1.5),
+        side: BorderSide(color: Colors.grey.shade300, width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1행: 종 아이콘 + 제목 (+ active일 때 예/아니오 버튼)
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Icon(
-                  _currentStatus == AlarmStatus.timedOut ? Icons.warning_amber_rounded : Icons.notifications_none_outlined,
-                  color: _currentStatus == AlarmStatus.timedOut ? Colors.red : Colors.grey.shade600,
-                  size: 20,
+                  _currentStatus == AlarmStatus.timedOut
+                      ? Icons.warning_amber_rounded
+                      : Icons.notifications_none_outlined,
+                  color: _currentStatus == AlarmStatus.timedOut
+                      ? Colors.red
+                      : (needsResponse ? _mainOrange : Colors.grey.shade600),
+                  size: 22,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '랩실에 계신가요?',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '랩실에 계신가요?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
                 ),
-                const Spacer(),
-                Text(widget.alarm.time, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                if (_currentStatus == AlarmStatus.active) ...[
+                  _buildResponseButton(icon: Icons.check, color: Colors.green, onPressed: _onRespondYes),
+                  const SizedBox(width: 10),
+                  _buildResponseButton(icon: Icons.close, color: Colors.red, onPressed: _onRespondNo),
+                ],
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 12),
+            // 2행: 시간 (제목과 왼쪽 정렬)
             Padding(
-              padding: const EdgeInsets.only(left: 28),
-              child: Text(widget.alarm.date, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+              padding: const EdgeInsets.only(left: 32), // 아이콘(22) + 간격(10) = 32
+              child: Text(
+                widget.alarm.time,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
             ),
+            const SizedBox(height: 12),
+            // 3행: 응답 상태 또는 프로그레스바
             Padding(
-              padding: const EdgeInsets.only(left: 28, top: 12),
+              padding: const EdgeInsets.only(left: 32),
               child: _buildStatusSection(),
             ),
           ],
@@ -197,69 +253,78 @@ class _AlarmCardState extends State<AlarmCard> {//이 위젯의 상태를 관리
 //텍스트들을 배치
   Widget _buildStatusSection() {//_currentStatus값에 따라 완전히 다른 ui를 반환
     switch (_currentStatus) {
-      case AlarmStatus.active://활성 상태
+      case AlarmStatus.active://활성 상태 (버튼은 1행에 있음)
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                _buildResponseButton(icon: Icons.check, color: Colors.green, onPressed: _onRespondYes),
-                const SizedBox(width: 12),
-                _buildResponseButton(icon: Icons.close, color: Colors.red, onPressed: _onRespondNo),
-              ],
-            ),
-            const SizedBox(height: 12),
             LinearProgressIndicator(
               value: _remainingTime.inSeconds / _totalDuration.inSeconds,
               backgroundColor: Colors.grey[300],
-              color: const Color(0xFFFFA726),
+              color: _mainOrange,
               minHeight: 6,
               borderRadius: BorderRadius.circular(3),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               '${_remainingTime.inMinutes}분 ${(_remainingTime.inSeconds % 60).toString().padLeft(2, '0')}초 남음',
-              style: const TextStyle(color: Color(0xFFE65100), fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
             ),
           ],
         );
       case AlarmStatus.respondedYes://예 응답
-        return const Text(
-          '✓ 응답함: 랩실에 있음',
-          style: TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold, fontSize: 15),
+        return Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green.shade700, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '응답함: 랩실에 있음',
+              style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         );
       case AlarmStatus.respondedNo://아니요 응답
-        return const Text(
-          '✓ 응답함: 랩실에 없음',
-          style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold, fontSize: 15),
+        return Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.red.shade700, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '응답함: 랩실에 없음',
+              style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         );
       case AlarmStatus.timedOut:
-        return const Text(
-          '! 자동 퇴실 처리됨 (무응답)',
-          style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold, fontSize: 15),
+        return Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '자동 퇴실 처리됨 (무응답)',
+              style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         );
       case AlarmStatus.pending:
-      default:
         return const SizedBox.shrink();
     }
   }
 //예, 아니요 버튼을 디자인은 같게, 기능과 아이콘, 색상만 다르게 만듦
   Widget _buildResponseButton({required IconData icon, required Color color, required VoidCallback onPressed}) {
     return Material(
-      color: color.withOpacity(0.1),
+      color: color.withOpacity(0.15),
       shape: const CircleBorder(),
       child: InkWell(
         onTap: onPressed,
         customBorder: const CircleBorder(),
         splashColor: color.withOpacity(0.3),
         child: Container(
-          width: 44,
-          height: 44,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: color.withOpacity(0.5), width: 1.5),
           ),
-          child: Icon(icon, color: color, size: 24),
+          child: Icon(icon, color: color, size: 20),
         ),
       ),
     );

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 
-// 랩실 상태를 정의하는 enum
+/// 랩실 상태
 enum LabStatus { inLab, outLab }
-
-const Color White = Color(0xFFFFFFFF);
-const Color Grey = Color(0xFF9CA3AF);
-const Color LightGrey = Color(0xFFE5E7EB); // 비활성화된 버튼 배경색
 
 // 화면의 한 부분을 구성하는 메인 상태 관리 위젯
 class LabStatusCard extends StatefulWidget {
@@ -25,8 +22,7 @@ class _LabStatusCardState extends State<LabStatusCard> {
       setState(() {
         _currentStatus = newStatus;
       });
-      // 실제 로직에서는 여기에 서버 통신 등을 추가합니다.
-      print('Status updated to: ${_currentStatus == LabStatus.inLab ? 'In Lab' : 'Out Lab'}');
+      // TODO: 서버 연동 시 AttendanceService.checkIn/checkOut 호출
     }
   }
 
@@ -34,10 +30,12 @@ class _LabStatusCardState extends State<LabStatusCard> {
   Widget build(BuildContext context) {
     // 시각적 구분을 위해 Card 위젯 사용
     return Card(
-      // 카드 내부의 여백 설정
-      margin: const EdgeInsets.all(16.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 4,
+      color: const Color(0xFFFFFFFF),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         // 모든 요소를 세로로 배치
@@ -65,8 +63,11 @@ class _LabStatusCardState extends State<LabStatusCard> {
             ),
             const SizedBox(height: 16), // 간격
 
-            // 4. 직접 상태 변경 토글 영역
-            const _ManualToggle(),
+            // 4. 직접 상태 변경 토글 영역 (상태와 연동)
+            _ManualToggle(
+              currentStatus: _currentStatus,
+              onStatusChanged: _updateStatus,
+            ),
           ],
         ),
       ),
@@ -87,7 +88,7 @@ class _CurrentStatus extends StatelessWidget {
     final isInLab = status == LabStatus.inLab;
     final statusText = isInLab ? '랩실 안에 있습니다' : '랩실 밖에 있습니다';
     final statusDetail = isInLab ? '마지막 체크인: 오늘 09:45' : '마지막 체크아웃: 어제 18:30';
-    final statusColor = isInLab ? Colors.green.shade600 : Grey;
+    final statusColor = isInLab ? Colors.green.shade600 : AppColors.grey;
 
     // 아이콘과 텍스트를 가로로 배치
     return Row(
@@ -109,7 +110,7 @@ class _CurrentStatus extends StatelessWidget {
             ),
             Text(
                 statusDetail,
-                style: const TextStyle(fontSize: 11.9, color: Grey)
+                style: const TextStyle(fontSize: 11.9, color: AppColors.grey)
             ),
           ],
         ),
@@ -129,51 +130,71 @@ class _InOutButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final isInLab = currentStatus == LabStatus.inLab;
 
-    // --- 버튼 스타일 정의 ---
-
-    // 랩실 '안에 있음' 버튼 스타일 (선택/비선택)
-    final inStyle = ElevatedButton.styleFrom(
-      backgroundColor: isInLab ? Colors.deepOrange : LightGrey, // 선택되면 주황, 아니면 밝은 회색
-      foregroundColor: isInLab ? White : Grey, // 선택되면 흰색, 아니면 회색
-      minimumSize: const Size(double.infinity, 80),
-      elevation: isInLab ? 4 : 0, // 선택되면 그림자 추가
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    );
-
-    // 랩실 '밖에 있음' 버튼 스타일 (선택/비선택)
-    final outStyle = ElevatedButton.styleFrom(
-      backgroundColor: !isInLab ? Colors.deepOrange : LightGrey, // 선택되면 주황, 아니면 밝은 회색
-      foregroundColor: !isInLab ? White : Grey, // 선택되면 흰색, 아니면 회색
-      minimumSize: const Size(double.infinity, 80),
-      elevation: !isInLab ? 4 : 0, // 선택되면 그림자 추가
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    );
+    // 들어오기: 랩실 밖일 때 주황(활성), 랩실 안일 때 회색 테두리
+    // 나가기: 랩실 안일 때 주황(활성), 랩실 밖일 때 회색 테두리
+    final inActive = !isInLab; // 랩실 밖에 있으면 들어오기가 주 액션
+    final outActive = isInLab; // 랩실 안에 있으면 나가기가 주 액션
 
     return Row(
       children: [
-        // 들어오기 버튼 (IN_LAB)
+        // 들어오기 버튼 (IN_LAB) - 오른쪽 화살표
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(right: 4.0), // 버튼 사이 간격 조정
-            child: ElevatedButton.icon(
-              onPressed: () => onUpdateStatus(LabStatus.inLab),
-              icon: const Icon(Icons.arrow_forward_ios, size: 20),
-              label: const Text('들어오기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              style: inStyle,
-            ),
+            padding: const EdgeInsets.only(right: 4.0),
+            child: inActive
+                ? ElevatedButton.icon(
+                    onPressed: () => onUpdateStatus(LabStatus.inLab),
+                    icon: const Icon(Icons.arrow_forward_ios, size: 16),
+                    label: const Text('들어오기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.surface,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: () => onUpdateStatus(LabStatus.inLab),
+                    icon: const Icon(Icons.arrow_forward_ios, size: 16),
+                    label: const Text('들어오기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.grey,
+                      side: const BorderSide(color: AppColors.lightGrey),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
           ),
         ),
-
-        // 나가기 버튼 (OUT_LAB)
+        // 나가기 버튼 (OUT_LAB) - 왼쪽 화살표
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(left: 4.0), // 버튼 사이 간격 조정
-            child: ElevatedButton.icon(
-              onPressed: () => onUpdateStatus(LabStatus.outLab),
-              icon: const Icon(Icons.arrow_back_ios, size: 20),
-              label: const Text('나가기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              style: outStyle,
-            ),
+            padding: const EdgeInsets.only(left: 4.0),
+            child: outActive
+                ? ElevatedButton.icon(
+                    onPressed: () => onUpdateStatus(LabStatus.outLab),
+                    icon: const Icon(Icons.arrow_back_ios, size: 16),
+                    label: const Text('나가기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.surface,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: () => onUpdateStatus(LabStatus.outLab),
+                    icon: const Icon(Icons.arrow_back_ios, size: 16),
+                    label: const Text('나가기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.grey,
+                      side: const BorderSide(color: AppColors.lightGrey),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
           ),
         ),
       ],
@@ -182,32 +203,36 @@ class _InOutButtons extends StatelessWidget {
 }
 
 // 4. 직접 상태 변경 토글 위젯
-class _ManualToggle extends StatefulWidget {
-  const _ManualToggle();
+// 토글 ON = 랩실 안 (나가기 주황), 토글 OFF = 랩실 밖 (들어오기 주황)
+// 들어오기 누르면 토글 ON, 나가기 누르면 토글 OFF
+class _ManualToggle extends StatelessWidget {
+  final LabStatus currentStatus;
+  final Function(LabStatus) onStatusChanged;
 
-  @override
-  State<_ManualToggle> createState() => _ManualToggleState();
-}
-
-class _ManualToggleState extends State<_ManualToggle> {
-  bool _isManualEnabled = false; // 토글 상태 변수
+  const _ManualToggle({
+    required this.currentStatus,
+    required this.onStatusChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // 텍스트와 스위치를 가로로 배치
+    final isInLab = currentStatus == LabStatus.inLab;
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween, // 양쪽 끝으로 벌림
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('직접 상태 변경', style: TextStyle(fontSize: 14, color: Grey)),
-        // 토글 스위치 (상태 관리 필요)
+        const Text('직접 상태 변경', style: TextStyle(fontSize: 14, color: AppColors.grey)),
         Switch(
-          value: _isManualEnabled,
+          value: isInLab, // 토글 ON = 랩실 안
           onChanged: (bool newValue) {
-            setState(() {
-              _isManualEnabled = newValue;
-            });
-            // 로직: 수동 상태 변경이 켜지면 자동 감지 기능을 끄는 등의 로직 구현
+            onStatusChanged(newValue ? LabStatus.inLab : LabStatus.outLab);
           },
+          activeTrackColor: AppColors.primary.withValues(alpha: 0.5),
+          activeThumbColor: AppColors.surface,
+          inactiveThumbColor: AppColors.surface,
+          inactiveTrackColor: const Color(0xFFD1D5DB),
+          trackOutlineWidth: WidgetStateProperty.all(0),
+          trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
         ),
       ],
     );

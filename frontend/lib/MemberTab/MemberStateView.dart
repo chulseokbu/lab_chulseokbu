@@ -1,6 +1,5 @@
 // lib/attendance_view.dart
 import 'package:flutter/material.dart';
-import 'package:frontend/TabBar/Shared_widgets.dart';
 
 // =======================================================
 // 출석뷰 메인 화면 위젯
