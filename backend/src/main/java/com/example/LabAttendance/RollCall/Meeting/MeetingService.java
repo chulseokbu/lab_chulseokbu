@@ -105,16 +105,16 @@ public class MeetingService {
             Member mem = mm.getMember();
             Attendance todayAttendance = todayAttendanceByMemberId.get(mem.getId());
 
-            boolean isPresent = todayAttendance != null && todayAttendance.getStatus() == AttendanceStatus.IN;
+            // "잔류 중"은 오늘 출석이 있고, 아직 체크아웃(endTime)이 없는 inout이 존재하는 경우로 정의합니다.
+            boolean isPresent = todayAttendance != null && hasOpenInOut(todayAttendance);
             String checkIn = null;
             String lastExit = null;
+            // 잔류 시간(duration)은 프론트에서 (now - checkIn)으로 실시간 계산하도록 null로 둡니다.
             String duration = null;
 
             if (isPresent) {
-                checkIn = earliestCheckInTime(todayAttendance);
-                duration = todayAttendance.getTotal() != null
-                        ? DailyStayDto.from(todayAttendance).duration()
-                        : null;
+                // 오늘 "가장 최근 체크인(현재 열려 있는 세션의 시작시간)" 기준
+                checkIn = latestOpenCheckInTime(todayAttendance);
             } else {
                 Optional<InOut> last = inOutRepository
                         .findTopByAttendance_Member_IdAndEndTimeIsNotNullOrderByAttendance_DateDescEndTimeDesc(mem.getId());
@@ -203,12 +203,18 @@ public class MeetingService {
         }
     }
 
-    private String earliestCheckInTime(Attendance todayAttendance) {
+    private boolean hasOpenInOut(Attendance todayAttendance) {
+        if (todayAttendance.getInOuts() == null) return false;
+        return todayAttendance.getInOuts().stream().anyMatch(io -> io.getEndTime() == null);
+    }
+
+    private String latestOpenCheckInTime(Attendance todayAttendance) {
         if (todayAttendance.getInOuts() == null || todayAttendance.getInOuts().isEmpty()) return null;
         return todayAttendance.getInOuts().stream()
+                .filter(io -> io.getEndTime() == null)
                 .map(InOut::getStartTime)
                 .filter(Objects::nonNull)
-                .min(LocalTime::compareTo)
+                .max(LocalTime::compareTo)
                 .map(t -> t.format(TIME_FORMATTER))
                 .orElse(null);
     }
