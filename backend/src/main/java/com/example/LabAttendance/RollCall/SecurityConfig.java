@@ -57,6 +57,8 @@ public class SecurityConfig {
 
                 // 요청에 대한 접근 권한 설정
                 .authorizeHttpRequests(authorize -> authorize
+                        // Spring Boot 기본 에러 엔드포인트 (validation 등)
+                        .requestMatchers("/error").permitAll()
                         // Preflight(OPTIONS) 요청 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // H2 Console 경로 허용
