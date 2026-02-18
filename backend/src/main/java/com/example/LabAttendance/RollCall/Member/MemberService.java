@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+
 @RequiredArgsConstructor
 @Service
 @Transactional
@@ -29,14 +31,14 @@ public class MemberService {
 
 
         Member member = new Member(
-                null, // id (DB에서 자동 생성되므로 null 전달)
+                null,
                 requestDto.memberId(),
                 requestDto.nickname(),
                 hashedPassword,
                 requestDto.email(),
                 requestDto.phone(),
                 requestDto.gender(),
-                null // attandenceList (생성 시에는 null 또는 new ArrayList() 전달)
+                new ArrayList<>()
         );
 
         memberRepository.save(member);
