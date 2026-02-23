@@ -2,6 +2,7 @@ package com.example.LabAttendance.RollCall;
 
 import com.example.LabAttendance.RollCall.global.jwt.JwtAuthenticationFilter;
 import com.example.LabAttendance.RollCall.global.jwt.JwtTokenProvider;
+import com.example.LabAttendance.RollCall.global.jwt.TokenBlacklistService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,10 +27,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    // JwtTokenProvider를 주입받아 사용합니다.
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
+    public SecurityConfig(JwtTokenProvider jwtTokenProvider, TokenBlacklistService tokenBlacklistService) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Bean
@@ -81,7 +83,7 @@ public class SecurityConfig {
 
                 // JWT 인증 필터를 UsernamePasswordAuthenticationFilter 이전에 등록합니다.
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider),
+                        new JwtAuthenticationFilter(jwtTokenProvider, tokenBlacklistService),
                         UsernamePasswordAuthenticationFilter.class
                 );
 

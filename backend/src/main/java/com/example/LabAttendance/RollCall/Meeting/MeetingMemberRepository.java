@@ -1,6 +1,7 @@
 package com.example.LabAttendance.RollCall.Meeting;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -8,6 +9,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MeetingMemberRepository extends JpaRepository<MeetingMember, Long> {
+
+    @Modifying
+    @Query("DELETE FROM MeetingMember mm WHERE mm.member.id = :memberId")
+    void deleteAllByMemberId(@Param("memberId") Long memberId);
 
     boolean existsByMeeting_IdAndMember_Id(Long meetingId, Long memberId);
 

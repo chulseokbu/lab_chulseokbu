@@ -1,5 +1,7 @@
 package com.example.LabAttendance.RollCall.Member;
 
+import com.example.LabAttendance.RollCall.Meeting.MeetingMemberRepository;
+import com.example.LabAttendance.RollCall.Meeting.MeetingRepository;
 import com.example.LabAttendance.RollCall.Member.DTO.*;
 import com.example.LabAttendance.RollCall.global.Exception.DuplicateEmailException;
 import com.example.LabAttendance.RollCall.global.Exception.MemberNotFoundException;
@@ -20,6 +22,8 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final MeetingMemberRepository meetingMemberRepository;
+    private final MeetingRepository meetingRepository;
 
     public MemberResponseDto create(MemberSignupRequestDto requestDto) {
 
@@ -52,6 +56,15 @@ public class MemberService {
         );
     }
 
+    public void withdraw(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
+
+        meetingMemberRepository.deleteAllByMemberId(memberId);
+        meetingRepository.clearCreatedByMemberId(memberId);
+        memberRepository.delete(member);
+    }
+
     public LoginResponseDto login(LoginRequestDto requestDto) {
 
         Member member = memberRepository.findByEmail(requestDto.email())
@@ -65,8 +78,8 @@ public class MemberService {
         String jwtToken = jwtTokenProvider.generateToken(member.getId(), member.getEmail());
 
         return new LoginResponseDto(
-                jwtToken,    // accessToken
-                member.getId(),
+                jwtToken,
+                member.getMemberNum(),
                 member.getNickname(),
                 member.getPhone(),
                 member.getEmail()
