@@ -1,6 +1,7 @@
 package com.example.LabAttendance.RollCall.Meeting;
 
 import com.example.LabAttendance.RollCall.Meeting.Dto.*;
+import com.example.LabAttendance.RollCall.global.Exception.AlreadyInMeetingException;
 import com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,6 +69,9 @@ public class MeetingController {
             return ResponseEntity.ok(ApiResponse.success(joined, "모임 참여 성공"));
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.failure(e.getMessage()));
+        } catch (AlreadyInMeetingException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiResponse.failure(e.getMessage()));
         }
     }

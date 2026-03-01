@@ -10,6 +10,7 @@ import com.example.LabAttendance.RollCall.InOut.Dto.InoutDto;
 import com.example.LabAttendance.RollCall.Meeting.Dto.*;
 import com.example.LabAttendance.RollCall.Member.Member;
 import com.example.LabAttendance.RollCall.Member.MemberRepository;
+import com.example.LabAttendance.RollCall.global.Exception.AlreadyInMeetingException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -67,9 +68,11 @@ public class MeetingService {
         Meeting meeting = meetingRepository.findByCode(code)
                 .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
 
-        if (!meetingMemberRepository.existsByMeeting_IdAndMember_Id(meeting.getId(), member.getId())) {
-            meetingMemberRepository.save(new MeetingMember(meeting, member));
+        if (meetingMemberRepository.existsByMeeting_IdAndMember_Id(meeting.getId(), member.getId())) {
+            throw new AlreadyInMeetingException("이미 참여 중인 모임입니다.");
         }
+
+        meetingMemberRepository.save(new MeetingMember(meeting, member));
 
         int memberCount = meetingMemberRepository.findAllByMeetingIdWithMember(meeting.getId()).size();
         return MeetingResponseDto.from(meeting, memberCount);
