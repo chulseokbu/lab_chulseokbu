@@ -30,6 +30,7 @@ import java.util.Map;
                 - 회원 가입
                 - 로그인
                 - 로그아웃
+                - 프로필 수정
                 - 회원 탈퇴
                 - 이메일 중복, 인증 실패 등의 예외를 처리합니다.
                 """
@@ -275,6 +276,90 @@ public class MemberController {
             tokenBlacklistService.blacklist(token);
         }
         return ResponseEntity.ok(Map.of("message", "로그아웃 되었습니다."));
+    }
+
+    @Operation(
+            summary = "프로필 수정",
+            description = """
+                    로그인한 사용자의 프로필 정보(닉네임, 이메일, 전화번호)를 수정합니다.
+
+                    ### 변경 가능 필드
+                    - 닉네임
+                    - 이메일
+                    - 전화번호
+
+                    ### 요청 헤더
+                    - `Authorization: Bearer {token}`
+                    """,
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "수정 성공",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = MemberProfileResponseDto.class),
+                                    examples = @ExampleObject(
+                                            name = "profile-update-success",
+                                            summary = "프로필 수정 성공",
+                                            value = """
+                                                    {
+                                                      "id": 1,
+                                                      "memberId": 20250001,
+                                                      "nickname": "Tom",
+                                                      "email": "tom@test.com",
+                                                      "phone": "01012345678"
+                                                    }
+                                                    """
+                                    )
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "400",
+                            description = "입력값 검증 실패",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "인증 토큰 없음 또는 만료",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "회원을 찾을 수 없음",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "409",
+                            description = "이메일 중복",
+                            content = @Content(
+                                    mediaType = "text/plain",
+                                    examples = @ExampleObject(
+                                            name = "duplicate-email",
+                                            value = "이미 존재하는 이메일입니다: new@test.com"
+                                    )
+                            )
+                    )
+            }
+    )
+    @PatchMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @Valid @RequestBody ProfileUpdateRequestDto requestDto,
+            BindingResult bindingResult
+    ) {
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(bindingResult.getFieldErrors());
+        }
+
+        Long memberId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        try {
+            MemberProfileResponseDto responseDto = memberService.updateProfile(memberId, requestDto);
+            return ResponseEntity.ok(responseDto);
+        } catch (MemberNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (DuplicateEmailException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
 
     @Operation(

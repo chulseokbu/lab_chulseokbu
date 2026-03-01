@@ -56,6 +56,25 @@ public class MemberService {
         );
     }
 
+    public MemberProfileResponseDto updateProfile(Long memberId, ProfileUpdateRequestDto requestDto) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
+
+        if (memberRepository.existsByEmailAndIdNot(requestDto.email(), memberId)) {
+            throw new DuplicateEmailException("이미 존재하는 이메일입니다: " + requestDto.email());
+        }
+
+        member.updateProfile(requestDto.nickname(), requestDto.email(), requestDto.phone());
+
+        return new MemberProfileResponseDto(
+                member.getId(),
+                member.getMemberNum(),
+                member.getNickname(),
+                member.getEmail(),
+                member.getPhone()
+        );
+    }
+
     public void withdraw(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
