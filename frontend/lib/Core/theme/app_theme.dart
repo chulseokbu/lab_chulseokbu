@@ -16,8 +16,13 @@ class AppTheme {
       ),
       useMaterial3: true,
     );
+    final appliedTextTheme = base.textTheme.apply(fontFamily: fontFamily);
     return base.copyWith(
-      textTheme: base.textTheme.apply(fontFamily: fontFamily),
+      textTheme: appliedTextTheme,
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: fontFamily),
+      appBarTheme: base.appBarTheme.copyWith(
+        titleTextStyle: appliedTextTheme.titleLarge,
+      ),
     );
   }
 }
