@@ -61,42 +61,39 @@ class _HomePageState extends State<HomePage> {
   // -> 출석 데이터는 _attendanceKey.currentState?.fetchMonthlyAttendance()를 통해
   //    AttendanceStatusCard 위젯이 직접 최신화하므로 여기서 중복으로 가져올 필요가 없습니다.
 
-  Widget _buildBody() {
-    switch (_selectedIndex) {
-      case 0:
-        return SingleChildScrollView(
-          child: Container(
-            color: AppColors.background,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LabStatusCard(
-                  key: _labStatusKey,
-                  onStatusUpdated: (DateTime? time) {
-                    setState(() {
-                      _currentCheckInTime = time;
-                    });
-                    // 💡 체크인/체크아웃 상태가 바뀌면 출석 카드를 새로고침하라고 명령함
-                    _attendanceKey.currentState?.fetchMonthlyAttendance();
-                  },
-                ),
-                const SizedBox(height: 16),
-                AttendanceStatusCard(key: _attendanceKey),
-                const SizedBox(height: 16),
-                NotificationView(
-                  embedded: true,
-                  checkInTime: _currentCheckInTime,
-                ),
-                const SizedBox(height: 100),
-              ],
-            ),
+  List<Widget> _buildTabContents() {
+    return [
+      SingleChildScrollView(
+        child: Container(
+          color: AppColors.background,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LabStatusCard(
+                key: _labStatusKey,
+                onStatusUpdated: (DateTime? time) {
+                  setState(() {
+                    _currentCheckInTime = time;
+                  });
+                  _attendanceKey.currentState?.fetchMonthlyAttendance();
+                },
+              ),
+              const SizedBox(height: 16),
+              AttendanceStatusCard(key: _attendanceKey),
+              const SizedBox(height: 16),
+              NotificationView(
+                embedded: true,
+                checkInTime: _currentCheckInTime,
+              ),
+              const SizedBox(height: 100),
+            ],
           ),
-        );
-      case 1: return const MeetingListScreen();
-      case 2: return const RetentionStatusView();
-      default: return const Center(child: Text('페이지 없음'));
-    }
+        ),
+      ),
+      const MeetingListScreen(),
+      const RetentionStatusView(),
+    ];
   }
 
   @override
@@ -135,7 +132,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _buildTabContents(),
+      ),
       bottomNavigationBar: CustomBottomNavBar(
         currentIndex: _selectedIndex,
         onItemSelected: (i) => setState(() => _selectedIndex = i),
