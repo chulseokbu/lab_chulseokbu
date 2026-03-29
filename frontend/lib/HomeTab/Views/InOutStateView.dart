@@ -32,6 +32,10 @@ class LabStatusCardState extends State<LabStatusCard>
   static const String _keyLastCheckInAt = 'attendance_last_check_in_at';
   static const String _keyLastCheckOutAt = 'attendance_last_check_out_at';
 
+  DateTime _nowUtc() => DateTime.now().toUtc();
+
+  DateTime _toKst(DateTime value) => value.toUtc().add(const Duration(hours: 9));
+
   @override
   void initState() {
     super.initState();
@@ -100,10 +104,11 @@ class LabStatusCardState extends State<LabStatusCard>
 
   String _formatDateTime(DateTime? value) {
     if (value == null) return '-';
-    final mm = value.month.toString().padLeft(2, '0');
-    final dd = value.day.toString().padLeft(2, '0');
-    final hh = value.hour.toString().padLeft(2, '0');
-    final mi = value.minute.toString().padLeft(2, '0');
+    final kst = _toKst(value);
+    final mm = kst.month.toString().padLeft(2, '0');
+    final dd = kst.day.toString().padLeft(2, '0');
+    final hh = kst.hour.toString().padLeft(2, '0');
+    final mi = kst.minute.toString().padLeft(2, '0');
     return '$mm/$dd $hh:$mi';
   }
 
@@ -119,7 +124,7 @@ class LabStatusCardState extends State<LabStatusCard>
       final checkInId = await AttendanceService.instance.checkIn();
       _currentStatus = LabStatus.inLab;
       _activeCheckInId = checkInId;
-      _lastCheckInAt = DateTime.now();
+      _lastCheckInAt = _nowUtc();
       await _persistAttendanceState();
       widget.onStatusUpdated?.call(_lastCheckInAt);
       _showSnackBar('체크인되었습니다.');
@@ -149,7 +154,7 @@ class LabStatusCardState extends State<LabStatusCard>
       await AttendanceService.instance.checkOut(_activeCheckInId!);
       _currentStatus = LabStatus.outLab;
       _activeCheckInId = null;
-      _lastCheckOutAt = DateTime.now();
+      _lastCheckOutAt = _nowUtc();
       await _persistAttendanceState();
       widget.onStatusUpdated?.call(null);
       _showSnackBar('체크아웃되었습니다.');

@@ -17,4 +17,14 @@ class ApiConfig {
   // Lab Stay API
   static const String stayWeek = '/lab/stay/week';
   static const String stayMonth = '/lab/stay/month';
+
+  // Meeting API
+  static const String meetings = '/lab/meetings';
+  static const String joinMeeting = '/lab/meetings/join';
+  static String meetingRetention(int meetingId) =>
+      '/lab/meetings/$meetingId/retention';
+  static String meetingStayWeek(int meetingId) =>
+      '/lab/meetings/$meetingId/stay/week';
+  static String meetingStayMonth(int meetingId) =>
+      '/lab/meetings/$meetingId/stay/month';
 }
