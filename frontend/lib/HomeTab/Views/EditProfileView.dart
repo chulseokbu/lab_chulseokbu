@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/core/theme/app_colors.dart'; // 💡 AppColors 임포트
-import 'Profile_Service.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 
 class EditProfileDialog extends StatefulWidget {
   final String initialName;
   final String initialStudentId;
   final String initialPhone;
   final String initialEmail;
-  final Future<void> Function(String name, String studentId, String phone, String email) onSave;
+  final Future<void> Function(String name, String studentId) onSave;
   final VoidCallback? onLogout;
+  final Future<String?> Function(String password)? onWithdrawAccount;
 
   const EditProfileDialog({
     super.key,
@@ -18,6 +18,7 @@ class EditProfileDialog extends StatefulWidget {
     required this.initialEmail,
     required this.onSave,
     this.onLogout,
+    this.onWithdrawAccount,
   });
 
   @override
@@ -48,6 +49,64 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     super.dispose();
   }
 
+  Future<void> _showWithdrawFlow() async {
+    if (widget.onWithdrawAccount == null) return;
+    final passwordController = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('회원 탈퇴'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('탈퇴 시 계정과 관련 데이터가 삭제됩니다. 비밀번호를 입력하세요.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: '비밀번호',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('탈퇴', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    final password = ok == true ? passwordController.text.trim() : '';
+    passwordController.dispose();
+
+    if (ok != true || !mounted) return;
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비밀번호를 입력해 주세요.')),
+      );
+      return;
+    }
+
+    final message = await widget.onWithdrawAccount!(password);
+    if (!mounted) return;
+    if (message == null) {
+      Navigator.pop(context);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -58,7 +117,6 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 1. 상단 헤더 영역 (이미지 및 배경)
             Stack(
               alignment: Alignment.center,
               clipBehavior: Clip.none,
@@ -85,38 +143,49 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                     child: CircleAvatar(
                       radius: 45,
                       backgroundColor: AppColors.primary.withOpacity(0.1),
-                      child: const Icon(Icons.person_rounded, size: 50, color: AppColors.primary),
+                      child: const Icon(Icons.person_rounded,
+                          size: 50, color: AppColors.primary),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 55),
-
             const Text(
               '내 정보 수정',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary),
             ),
             const SizedBox(height: 25),
-
-            // 2. 입력 필드 리스트
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  _buildProfileTextField(label: '이름', controller: nameController, icon: Icons.badge_outlined),
+                  _buildProfileTextField(
+                      label: '이름',
+                      controller: nameController,
+                      icon: Icons.badge_outlined),
                   const SizedBox(height: 16),
-                  _buildProfileTextField(label: '학번', controller: idController, icon: Icons.school_outlined),
+                  _buildProfileTextField(
+                      label: '학번',
+                      controller: idController,
+                      icon: Icons.school_outlined),
                   const SizedBox(height: 16),
-                  _buildProfileTextField(label: '전화번호', controller: phoneController, icon: Icons.phone_android_rounded),
+                  _buildReadOnlyField(
+                      label: '전화번호',
+                      controller: phoneController,
+                      icon: Icons.phone_android_rounded),
                   const SizedBox(height: 16),
-                  _buildProfileTextField(label: '이메일', controller: emailController, icon: Icons.alternate_email_rounded),
+                  _buildReadOnlyField(
+                      label: '이메일',
+                      controller: emailController,
+                      icon: Icons.alternate_email_rounded),
                 ],
               ),
             ),
             const SizedBox(height: 32),
-
-            // 3. 하단 버튼 영역
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -127,9 +196,13 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: const Text('취소', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                      child: const Text('취소',
+                          style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -139,26 +212,25 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                         await widget.onSave(
                           nameController.text.trim(),
                           idController.text.trim(),
-                          phoneController.text.trim(),
-                          emailController.text.trim(),
                         );
-                        if (mounted) Navigator.pop(context);
+                        if (!context.mounted) return;
+                        Navigator.pop(context);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: const Text('저장하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text('저장하기',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
               ),
             ),
-
-            // 4. 로그아웃 섹션
             if (widget.onLogout != null) ...[
               const SizedBox(height: 16),
               Padding(
@@ -183,6 +255,21 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 ),
               ),
             ],
+            if (widget.onWithdrawAccount != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: TextButton(
+                  onPressed: _showWithdrawFlow,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 44),
+                    foregroundColor: AppColors.textSecondary,
+                  ),
+                  child: const Text('회원 탈퇴',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
           ],
         ),
@@ -190,7 +277,6 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     );
   }
 
-  // 💡 입력 필드 공통 디자인 위젯
   Widget _buildProfileTextField({
     required String label,
     required TextEditingController controller,
@@ -203,25 +289,84 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondary),
           ),
         ),
         TextField(
           controller: controller,
-          style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          style: const TextStyle(
+              fontWeight: FontWeight.w600, color: AppColors.textPrimary),
           decoration: InputDecoration(
             prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
             filled: true,
             fillColor: AppColors.background,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReadOnlyField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondary),
+          ),
+        ),
+        TextField(
+          controller: controller,
+          readOnly: true,
+          enableInteractiveSelection: true,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary.withOpacity(0.65),
+          ),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 20, color: Colors.grey.shade500),
+            filled: true,
+            fillColor: AppColors.background.withOpacity(0.85),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, top: 6),
+          child: Text(
+            '가입 시 등록된 정보는 변경할 수 없습니다.',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
           ),
         ),
       ],

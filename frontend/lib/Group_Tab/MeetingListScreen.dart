@@ -8,7 +8,7 @@ import 'package:frontend/Group_Tab/widgets/meeting_action_card.dart';
 import 'package:frontend/Group_Tab/widgets/meeting_card.dart';
 import 'package:frontend/HomeTab/Views/daily_status_view.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
-import 'package:frontend/models/meeting.dart';
+import 'package:frontend/models/meeting.dart' show Meeting, meetingRoleFromApi;
 
 class MeetingListScreen extends StatefulWidget {
   const MeetingListScreen({super.key});
@@ -56,13 +56,19 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
 
         if (mounted) {
           setState(() {
-            _meetings = fetchedData.map((m) => Meeting(
-              meetingId: _parseMeetingId(m),
-              code: (m['code'] ?? '').toString(),
-              name: m['name'] ?? '이름 없음',
-              memberCount: m['memberCount'] ?? 1,
-              createdAt: m['createdAt'] ?? '',
-            )).toList();
+            _meetings = fetchedData.map((m) {
+              final map = m is Map<String, dynamic>
+                  ? m
+                  : <String, dynamic>{};
+              return Meeting(
+                meetingId: _parseMeetingId(map),
+                code: (map['inviteCode'] ?? map['code'] ?? '').toString(),
+                name: map['name']?.toString() ?? '이름 없음',
+                memberCount: map['memberCount'] as int? ?? 0,
+                createdAt: map['createdAt']?.toString() ?? '',
+                myRole: meetingRoleFromApi(map['myRole']),
+              );
+            }).toList();
             _isLoading = false;
           });
         }
@@ -178,7 +184,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer $token'
                       },
-                      body: json.encode({"code": code}),
+                      body: json.encode({'inviteCode': code}),
                     );
                     final message = _extractServerMessage(response);
                     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -192,10 +198,11 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                       return;
                     }
 
-                    final bool isAlreadyJoined =
-                        response.statusCode == 409 ||
-                        (message.contains('이미') &&
-                            (message.contains('참여') || message.contains('가입')));
+                    final bool isAlreadyJoined = response.statusCode == 409 ||
+                        (response.statusCode == 400 &&
+                            message.contains('이미') &&
+                            (message.contains('참여') ||
+                                message.contains('가입')));
                     if (isAlreadyJoined) {
                       if (!mounted) return;
                       Navigator.of(context, rootNavigator: true).pop();
@@ -353,8 +360,15 @@ class _InternalCreateMeetingDialogState extends State<_InternalCreateMeetingDial
         body: json.encode({"name": name}),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        setState(() => _serverCode = data['data']['code']?.toString());
+        final data =
+            json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final inner = data['data'];
+        if (inner is Map<String, dynamic>) {
+          final code = (inner['inviteCode'] ?? inner['code'])?.toString();
+          if (code != null && code.isNotEmpty) {
+            setState(() => _serverCode = code);
+          }
+        }
       }
     } catch (e) {
       debugPrint("❌ 생성 에러: $e");

@@ -1,6 +1,9 @@
 import 'dart:async';
-// 💡 [삭제] import 'package:intl/intl.dart'; -> 사용하지 않음
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:frontend/api/api_config.dart';
 // 💡 [삭제] import 'package:http/http.dart' as http; -> LabStayService가 대신 처리함
 // 💡 [삭제] import 'dart:convert'; -> HomePage에서 직접 파싱할 일이 없어짐
 import 'package:frontend/HomeTab/Views/AttendanceStatusCard.dart';
@@ -151,15 +154,52 @@ class _HomePageState extends State<HomePage> {
         initialStudentId: _currentStudentId,
         initialPhone: _currentPhone,
         initialEmail: _currentEmail,
-        onSave: (name, id, phone, email) async {
+        onSave: (name, id) async {
           await _profileService.saveProfile(
             name: name,
             studentId: id,
             memberId: int.tryParse(id),
-            phone: phone,
-            email: email,
+            phone: _currentPhone,
+            email: _currentEmail,
           );
           await _loadUserData();
+        },
+        onWithdrawAccount: (password) async {
+          final data = await _profileService.loadProfile();
+          final token = data['accessToken'];
+          if (token == null || token.isEmpty) {
+            return '로그인이 필요합니다.';
+          }
+          try {
+            final response = await http.delete(
+              Uri.parse(
+                  '${ApiConfig.baseUrl}${ApiConfig.withdrawAccount}'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: json.encode({'password': password}),
+            );
+            final decoded = json.decode(utf8.decode(response.bodyBytes))
+                as Map<String, dynamic>;
+            final msg = (decoded['message'] ?? '').toString();
+            final ok =
+                response.statusCode == 200 && decoded['success'] == true;
+            if (ok) {
+              await _labStatusKey.currentState?.autoCheckOut();
+              await _profileService.clearProfile();
+              widget.onLogout?.call();
+              return null;
+            }
+            if (response.statusCode == 401) {
+              return msg.isNotEmpty ? msg : '비밀번호가 일치하지 않습니다.';
+            }
+            return msg.isNotEmpty ? msg : '탈퇴 처리에 실패했습니다.';
+          } catch (e) {
+            debugPrint('탈퇴 요청 오류: $e');
+            return '네트워크 오류로 탈퇴에 실패했습니다.';
+          }
         },
         onLogout: () async {
           await _labStatusKey.currentState?.autoCheckOut();
