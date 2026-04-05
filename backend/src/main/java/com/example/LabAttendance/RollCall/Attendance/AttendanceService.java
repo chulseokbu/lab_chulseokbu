@@ -11,6 +11,7 @@ import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayExc
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -96,6 +97,7 @@ public class AttendanceService {
         inOutRepository.save(inOut);
     }
 
+    @Transactional(readOnly = true)
     public List<DailyStayDto> getLast30Days(Long memberId) {
 
         LocalDate end = LocalDate.now();
