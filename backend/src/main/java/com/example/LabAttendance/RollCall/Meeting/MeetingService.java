@@ -200,6 +200,89 @@ public class MeetingService {
         return result;
     }
 
+    @Transactional(readOnly = true)
+    public MeetingDetailResponseDto getMeetingDetail(Long requesterMemberId, Long meetingId) {
+        assertMemberInMeeting(requesterMemberId, meetingId);
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        boolean isLeader = meeting.getCreatedBy() != null
+                && meeting.getCreatedBy().getId().equals(requesterMemberId);
+
+        List<MeetingMember> rows = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        List<MeetingMemberItemDto> members = rows.stream().map(mm -> {
+            Member m = mm.getMember();
+            boolean leader = meeting.getCreatedBy() != null
+                    && meeting.getCreatedBy().getId().equals(m.getId());
+            return new MeetingMemberItemDto(m.getId(), m.getNickname(), leader ? "LEADER" : "MEMBER");
+        }).toList();
+
+        String code = meeting.getCode();
+        return new MeetingDetailResponseDto(
+                meeting.getId(),
+                meeting.getName(),
+                code,
+                isLeader ? code : null,
+                isLeader ? "LEADER" : "MEMBER",
+                members
+        );
+    }
+
+    public void leaveMeeting(Long memberId, Long meetingId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        MeetingMember mine = meetingMemberRepository.findByMeeting_IdAndMember_Id(meetingId, memberId)
+                .orElseThrow(() -> new IllegalArgumentException("이 모임의 구성원이 아닙니다."));
+
+        Member createdBy = meeting.getCreatedBy();
+        boolean isCreator = createdBy != null && createdBy.getId().equals(memberId);
+
+        meetingMemberRepository.delete(mine);
+        meetingMemberRepository.flush();
+
+        List<MeetingMember> remaining = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        if (remaining.isEmpty()) {
+            meetingRepository.delete(meeting);
+            return;
+        }
+
+        if (isCreator) {
+            MeetingMember successor = remaining.stream()
+                    .min(Comparator.comparing(MeetingMember::getJoinedAt))
+                    .orElseThrow();
+            meeting.setCreatedBy(successor.getMember());
+            meetingRepository.save(meeting);
+        }
+    }
+
+    public void deleteMeeting(Long memberId, Long meetingId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        Member creator = meeting.getCreatedBy();
+        if (creator == null || !creator.getId().equals(memberId)) {
+            throw new IllegalArgumentException("모임을 삭제할 권한이 없습니다.");
+        }
+        meetingRepository.delete(meeting);
+    }
+
+    public void delegateLeadership(Long currentMemberId, Long meetingId, Long newLeaderMemberId) {
+        if (currentMemberId.equals(newLeaderMemberId)) {
+            throw new IllegalArgumentException("자기 자신에게 위임할 수 없습니다.");
+        }
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        Member creator = meeting.getCreatedBy();
+        if (creator == null || !creator.getId().equals(currentMemberId)) {
+            throw new IllegalArgumentException("모임장만 위임할 수 있습니다.");
+        }
+        if (!meetingMemberRepository.existsByMeeting_IdAndMember_Id(meetingId, newLeaderMemberId)) {
+            throw new IllegalArgumentException("선택한 회원은 이 모임에 참여 중이 아닙니다.");
+        }
+        Member newLeader = memberRepository.findById(newLeaderMemberId)
+                .orElseThrow(() -> new EntityNotFoundException("회원을 찾을 수 없습니다."));
+        meeting.setCreatedBy(newLeader);
+        meetingRepository.save(meeting);
+    }
+
     private void assertMemberInMeeting(Long memberId, Long meetingId) {
         if (!meetingMemberRepository.existsByMeeting_IdAndMember_Id(meetingId, memberId)) {
             throw new EntityNotFoundException("모임에 참여 중인 사용자만 조회할 수 있습니다.");

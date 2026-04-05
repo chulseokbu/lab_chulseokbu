@@ -3,11 +3,13 @@ package com.example.LabAttendance.RollCall.Meeting;
 import com.example.LabAttendance.RollCall.Meeting.Dto.*;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyInMeetingException;
 import com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse;
+import com.example.LabAttendance.RollCall.global.ResponneType.NoDataApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.BindingResult;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -72,6 +74,80 @@ public class MeetingController {
                     .body(ApiResponse.failure(e.getMessage()));
         } catch (AlreadyInMeetingException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.failure(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "모임 상세", description = "참여 중인 구성원만 조회합니다. 초대 코드는 모임장에게만 포함됩니다.")
+    @GetMapping("/{meetingId}")
+    public ResponseEntity<ApiResponse<MeetingDetailResponseDto>> getMeeting(
+            @AuthenticationPrincipal Long memberId,
+            @PathVariable Long meetingId
+    ) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    meetingService.getMeetingDetail(memberId, meetingId),
+                    "모임 상세 조회 성공"
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.failure(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "모임 탈퇴", description = "모임장이 나가면 가장 먼저 가입한 구성원이 모임장이 됩니다. 남은 사람이 없으면 모임이 삭제됩니다.")
+    @PostMapping("/{meetingId}/leave")
+    public ResponseEntity<?> leaveMeeting(
+            @AuthenticationPrincipal Long memberId,
+            @PathVariable Long meetingId
+    ) {
+        try {
+            meetingService.leaveMeeting(memberId, meetingId);
+            return ResponseEntity.ok(NoDataApiResponse.success("모임에서 탈퇴했습니다."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.failure(e.getMessage()));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.failure(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "모임 삭제", description = "모임장(생성자)만 전체 모임을 삭제할 수 있습니다.")
+    @DeleteMapping("/{meetingId}")
+    public ResponseEntity<?> deleteMeeting(
+            @AuthenticationPrincipal Long memberId,
+            @PathVariable Long meetingId
+    ) {
+        try {
+            meetingService.deleteMeeting(memberId, meetingId);
+            return ResponseEntity.ok(NoDataApiResponse.success("모임이 삭제되었습니다."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.failure(e.getMessage()));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.failure(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "모임장 위임", description = "모임장이 다른 구성원에게 생성자 권한을 넘깁니다.")
+    @PostMapping("/{meetingId}/delegate")
+    public ResponseEntity<?> delegateLeadership(
+            @AuthenticationPrincipal Long memberId,
+            @PathVariable Long meetingId,
+            @Valid @RequestBody DelegateLeaderRequestDto request,
+            BindingResult bindingResult
+    ) {
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(bindingResult.getFieldErrors());
+        }
+        try {
+            meetingService.delegateLeadership(memberId, meetingId, request.newLeaderMemberId());
+            return ResponseEntity.ok(NoDataApiResponse.success("모임장 권한이 위임되었습니다."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.failure(e.getMessage()));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.failure(e.getMessage()));
         }
     }

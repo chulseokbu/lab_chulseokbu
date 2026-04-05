@@ -49,5 +49,10 @@ public class Meeting {
         this.createdBy = createdBy;
         this.createdAt = LocalDate.now();
     }
+
+    /** 모임장(생성자) 변경 — 탈퇴·위임 시에만 사용 */
+    public void setCreatedBy(Member member) {
+        this.createdBy = member;
+    }
 }
 
