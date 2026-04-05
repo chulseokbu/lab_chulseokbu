@@ -3,7 +3,10 @@ package com.example.LabAttendance.RollCall.Member;
 import com.example.LabAttendance.RollCall.Member.DTO.*;
 import com.example.LabAttendance.RollCall.global.Exception.DuplicateEmailException;
 import com.example.LabAttendance.RollCall.global.Exception.MemberNotFoundException;
+import com.example.LabAttendance.RollCall.global.ResponneType.NoDataApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -14,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
                 - 회원 가입
                 - 로그인
+                - 계정 탈퇴(비밀번호 확인, 모임 자동 정리 후 회원 삭제)
                 - 이메일 중복, 인증 실패 등의 예외를 처리합니다.
                 """
 )
@@ -222,5 +227,41 @@ public class MemberController {
         }
 
         return ResponseEntity.ok(responseDto);
+    }
+
+    @Operation(
+            summary = "계정 탈퇴",
+            description = """
+                    비밀번호 확인 후 계정을 삭제합니다.
+
+                    ### 모임 처리
+                    - 참여 중인 모든 모임에서 탈퇴합니다.
+                    - 해당 회원이 **모임장**이었던 모임은, 모임 **단독 탈퇴**와 동일한 규칙이 적용됩니다.
+                      가입 시점이 가장 이른 구성원이 모임장으로 승격하고, 다른 구성원이 없으면 모임이 삭제됩니다.
+
+                    ### 기타 데이터
+                    - 출석 등 회원에 연쇄 삭제되도록 매핑된 데이터는 JPA 설정에 따라 함께 정리됩니다.
+                    """
+    )
+    @DeleteMapping("/me")
+    public ResponseEntity<?> withdraw(
+            @Parameter(name = "memberId", in = ParameterIn.HEADER, required = true)
+            @AuthenticationPrincipal Long memberId,
+            @Valid @RequestBody AccountWithdrawRequestDto request,
+            BindingResult bindingResult
+    ) {
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(bindingResult.getFieldErrors());
+        }
+        try {
+            memberService.withdrawAccount(memberId, request.password());
+            return ResponseEntity.ok(NoDataApiResponse.success("회원 탈퇴가 완료되었습니다."));
+        } catch (MemberNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse.failure(e.getMessage()));
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse.failure(e.getMessage()));
+        }
     }
 }

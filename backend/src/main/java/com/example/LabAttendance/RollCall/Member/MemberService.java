@@ -1,5 +1,6 @@
 package com.example.LabAttendance.RollCall.Member;
 
+import com.example.LabAttendance.RollCall.Meeting.MeetingService;
 import com.example.LabAttendance.RollCall.Member.DTO.*;
 import com.example.LabAttendance.RollCall.global.Exception.DuplicateEmailException;
 import com.example.LabAttendance.RollCall.global.Exception.MemberNotFoundException;
@@ -18,6 +19,7 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final MeetingService meetingService;
 
     public MemberResponseDto create(MemberSignupRequestDto requestDto) {
 
@@ -69,5 +71,18 @@ public class MemberService {
                 member.getPhone(),
                 member.getEmail()
         );
+    }
+
+    /**
+     * 비밀번호 확인 후, 참여 중인 모든 모임에서 탈퇴 처리(모임장이면 구성원 위임 규칙 적용) 뒤 회원을 삭제합니다.
+     */
+    public void withdrawAccount(Long memberId, String rawPassword) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberNotFoundException("회원을 찾을 수 없습니다."));
+        if (!passwordEncoder.matches(rawPassword, member.getPassword())) {
+            throw new BadCredentialsException("비밀번호가 일치하지 않습니다.");
+        }
+        meetingService.leaveAllMeetingsForMember(memberId);
+        memberRepository.delete(member);
     }
 }
