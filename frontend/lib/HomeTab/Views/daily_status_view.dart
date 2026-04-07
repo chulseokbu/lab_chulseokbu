@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
 import 'package:frontend/api/api_config.dart';
+import 'package:frontend/core/kst_calendar.dart';
+import 'package:frontend/core/stay_heatmap.dart';
 import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/models/meeting.dart';
 import 'package:http/http.dart' as http;
@@ -35,8 +37,6 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   List<_MeetingMemberRow> _meetingMembers = [];
   int? _myMemberId;
 
-  DateTime _nowKst() => DateTime.now().toUtc().add(const Duration(hours: 9));
-
   @override
   void initState() {
     super.initState();
@@ -60,6 +60,18 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     await _fetchMonthlyStay();
   }
 
+  /// 당겨서 새로고침: 목록은 유지한 채 잔류·월간·(목록 모드 시) 주간 데이터를 다시 받는다.
+  Future<void> _pullRefresh() async {
+    await Future.wait<void>([
+      _fetchRetention(silent: true),
+      _fetchMeetingDetail(),
+    ]);
+    await _fetchMonthlyStay(force: true);
+    if (_isListView) {
+      await _fetchWeeklyStay(force: true);
+    }
+  }
+
   Future<void> _fetchMeetingDetail() async {
     final id = widget.meeting.meetingId;
     if (id == null) return;
@@ -81,16 +93,21 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         },
       );
 
-      final Map<String, dynamic> decoded =
-          json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final raw = utf8.decode(response.bodyBytes);
+      Map<String, dynamic>? decoded;
+      try {
+        final d = json.decode(raw);
+        if (d is Map<String, dynamic>) decoded = d;
+      } catch (_) {}
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && decoded != null) {
         final data = decoded['data'];
         if (data is Map<String, dynamic>) {
           final rawMembers = data['members'] as List<dynamic>? ?? [];
           setState(() {
-            _myRole = meetingRoleFromApi(data['myRole']) ?? widget.meeting.myRole;
-            final code = data['inviteCode']?.toString();
+            _myRole = meetingRoleFromApi(data['myRole'] ?? data['role']) ??
+                widget.meeting.myRole;
+            final code = (data['inviteCode'] ?? data['code'])?.toString();
             _inviteCode = (code != null && code.isNotEmpty) ? code : null;
             _meetingMembers = rawMembers
                 .whereType<Map<String, dynamic>>()
@@ -99,12 +116,143 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                 .toList();
           });
         }
+      } else {
+        KstCalendar.debugLogHttpFailure(
+          tag: '[meeting detail]',
+          statusCode: response.statusCode,
+          body: raw,
+          url: '${ApiConfig.baseUrl}${ApiConfig.meetingById(id)}',
+        );
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[meeting detail] $e\n$st');
+    }
   }
 
-  bool get _isLeader =>
-      _myRole == MeetingRole.leader || widget.meeting.myRole == MeetingRole.leader;
+  bool get _isLeader {
+    if (_myRole == MeetingRole.leader) return true;
+    if (widget.meeting.myRole == MeetingRole.leader) return true;
+    final myId = _myMemberId;
+    if (myId != null) {
+      for (final m in _meetingMembers) {
+        if (m.memberId == myId && m.role == MeetingRole.leader) return true;
+      }
+    }
+    return false;
+  }
+
+  /// 모임 나가기 실패 시 사용자에게 보여 줄 한 줄 요약 (404·Spring 기본 에러 페이지 구분)
+  String _leaveFailureSummary({
+    required int statusCode,
+    required String serverMessage,
+    required String rawBody,
+  }) {
+    if (serverMessage.isNotEmpty) return serverMessage;
+
+    final body = rawBody.toLowerCase();
+    final looksLikeSpringNoHandler = statusCode == 404 &&
+        body.contains('"error"') &&
+        (body.contains('not found') || body.contains('"status":404'));
+
+    if (looksLikeSpringNoHandler) {
+      return '모임 나가기 요청이 404입니다. '
+          'Railway가 이 저장소 test 브랜치의 backend 최신 빌드를 배포했는지, '
+          'Swagger(/v3/api-docs)에 POST /lab/meetings/{id}/leave 가 있는지 확인해 주세요.';
+    }
+
+    return '모임 나가기에 실패했습니다. (HTTP $statusCode)';
+  }
+
+  String _formatMeetingApiDiagnostic({
+    required String requestUrl,
+    required int? statusCode,
+    required String serverMessage,
+    required String responseBody,
+    String? clientException,
+  }) {
+    final b = StringBuffer();
+    if (clientException != null && clientException.isNotEmpty) {
+      b.writeln('=== 클라이언트 예외 ===');
+      b.writeln(clientException);
+      b.writeln();
+    }
+    b.writeln('요청: $requestUrl');
+    if (statusCode != null) {
+      b.writeln('HTTP 상태: $statusCode');
+    }
+    if (serverMessage.isNotEmpty) {
+      b.writeln('서버 message: $serverMessage');
+    }
+    b.writeln('--- 응답 본문 ---');
+    final body = responseBody.trim();
+    b.writeln(body.isEmpty ? '(비어 있음)' : body);
+    return b.toString().trim();
+  }
+
+  Future<void> _showMeetingActionFailure({
+    required String summary,
+    required String detailText,
+  }) async {
+    if (!mounted) return;
+    debugPrint('[meeting] $summary\n$detailText');
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('요청 실패'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                summary,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      detailText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        fontFamily: 'monospace',
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final full = '$summary\n\n${detailText.trim()}'.trim();
+              await Clipboard.setData(ClipboardData(text: full));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('내용을 복사했습니다.')),
+              );
+            },
+            child: const Text('복사'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _copyInviteCode() async {
     final code = _inviteCode;
@@ -127,34 +275,86 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Future<void> _postMeetingLeave() async {
     final id = widget.meeting.meetingId;
     final token = await _getToken();
-    if (id == null || token == null) return;
+    final url = id != null
+        ? '${ApiConfig.baseUrl}${ApiConfig.meetingLeave(id)}'
+        : '(meetingId 없음)';
 
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetingLeave(id)}'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    final Map<String, dynamic> decoded =
-        json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final msg = (decoded['message'] ?? '').toString();
-
-    if (response.statusCode == 200 && decoded['success'] == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('모임에서 나갔습니다.')),
-        );
-        Navigator.pop(context);
-      }
+    if (id == null || token == null) {
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: '모임 나가기를 진행할 수 없습니다.',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: null,
+          serverMessage: '',
+          responseBody: '',
+          clientException: id == null
+              ? 'meetingId가 없습니다.'
+              : '로그인 토큰이 없습니다.',
+        ),
+      );
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg.isNotEmpty ? msg : '모임 나가기에 실패했습니다.'),
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      final rawBody = utf8.decode(response.bodyBytes);
+      Map<String, dynamic>? decoded;
+      try {
+        final d = json.decode(rawBody);
+        if (d is Map<String, dynamic>) decoded = d;
+      } catch (_) {}
+
+      final msg = decoded != null ? (decoded['message'] ?? '').toString() : '';
+      final success =
+          decoded != null && (decoded['success'] == true || decoded['success'] == 'true');
+
+      if (response.statusCode == 204 ||
+          (response.statusCode == 200 && success)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('모임에서 나갔습니다.')),
+          );
+          Navigator.pop(context);
+        }
+        return;
+      }
+
+      debugPrint('[leave] HTTP ${response.statusCode} $rawBody');
+      if (!mounted) return;
+
+      final summary = _leaveFailureSummary(
+        statusCode: response.statusCode,
+        serverMessage: msg,
+        rawBody: rawBody,
+      );
+
+      await _showMeetingActionFailure(
+        summary: summary,
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: response.statusCode,
+          serverMessage: msg,
+          responseBody: rawBody,
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('[leave] $e\n$st');
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: '모임 나가기 중 오류가 발생했습니다.',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: null,
+          serverMessage: '',
+          responseBody: '',
+          clientException: '$e\n\n$st',
         ),
       );
     }
@@ -163,34 +363,81 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Future<void> _deleteMeeting() async {
     final id = widget.meeting.meetingId;
     final token = await _getToken();
-    if (id == null || token == null) return;
+    final url = id != null
+        ? '${ApiConfig.baseUrl}${ApiConfig.meetingDelete(id)}'
+        : '(meetingId 없음)';
 
-    final response = await http.delete(
-      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetingDelete(id)}'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    final Map<String, dynamic> decoded =
-        json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final msg = (decoded['message'] ?? '').toString();
-
-    if (response.statusCode == 200 && decoded['success'] == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('모임이 삭제되었습니다.')),
-        );
-        Navigator.pop(context);
-      }
+    if (id == null || token == null) {
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: '모임 삭제를 진행할 수 없습니다.',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: null,
+          serverMessage: '',
+          responseBody: '',
+          clientException: id == null
+              ? 'meetingId가 없습니다.'
+              : '로그인 토큰이 없습니다.',
+        ),
+      );
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg.isNotEmpty ? msg : '모임 삭제에 실패했습니다.'),
+    try {
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      final rawBody = utf8.decode(response.bodyBytes);
+      Map<String, dynamic>? decoded;
+      try {
+        final d = json.decode(rawBody);
+        if (d is Map<String, dynamic>) decoded = d;
+      } catch (_) {}
+
+      final msg = decoded != null ? (decoded['message'] ?? '').toString() : '';
+      final success = decoded != null &&
+          (decoded['success'] == true || decoded['success'] == 'true');
+
+      if (response.statusCode == 204 ||
+          (response.statusCode == 200 && success)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('모임이 삭제되었습니다.')),
+          );
+          Navigator.pop(context);
+        }
+        return;
+      }
+
+      debugPrint('[delete meeting] HTTP ${response.statusCode} $rawBody');
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: msg.isNotEmpty
+            ? msg
+            : '모임 삭제에 실패했습니다. (HTTP ${response.statusCode})',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: response.statusCode,
+          serverMessage: msg,
+          responseBody: rawBody,
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('[delete meeting] $e\n$st');
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: '모임 삭제 중 오류가 발생했습니다.',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: null,
+          serverMessage: '',
+          responseBody: '',
+          clientException: '$e\n\n$st',
         ),
       );
     }
@@ -199,37 +446,84 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Future<void> _delegateTo(int newLeaderMemberId) async {
     final id = widget.meeting.meetingId;
     final token = await _getToken();
-    if (id == null || token == null) return;
+    final url = id != null
+        ? '${ApiConfig.baseUrl}${ApiConfig.meetingDelegate(id)}'
+        : '(meetingId 없음)';
 
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetingDelegate(id)}'),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({'newLeaderMemberId': newLeaderMemberId}),
-    );
-
-    final Map<String, dynamic> decoded =
-        json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final msg = (decoded['message'] ?? '').toString();
-
-    if (response.statusCode == 200 && decoded['success'] == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('모임장 권한을 위임했습니다.')),
-        );
-        await _fetchMeetingDetail();
-        await _fetchRetention();
-      }
+    if (id == null || token == null) {
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: '위임 요청을 진행할 수 없습니다.',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: null,
+          serverMessage: '',
+          responseBody: '',
+          clientException: id == null
+              ? 'meetingId가 없습니다.'
+              : '로그인 토큰이 없습니다.',
+        ),
+      );
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg.isNotEmpty ? msg : '위임에 실패했습니다.'),
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'newLeaderMemberId': newLeaderMemberId}),
+      );
+      final rawBody = utf8.decode(response.bodyBytes);
+      Map<String, dynamic>? decoded;
+      try {
+        final d = json.decode(rawBody);
+        if (d is Map<String, dynamic>) decoded = d;
+      } catch (_) {}
+
+      final msg = decoded != null ? (decoded['message'] ?? '').toString() : '';
+      final success = decoded != null &&
+          (decoded['success'] == true || decoded['success'] == 'true');
+
+      if (response.statusCode == 204 ||
+          (response.statusCode == 200 && success)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('모임장 권한을 위임했습니다.')),
+          );
+          await _fetchMeetingDetail();
+          await _fetchRetention();
+        }
+        return;
+      }
+
+      debugPrint('[delegate] HTTP ${response.statusCode} $rawBody');
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: msg.isNotEmpty
+            ? msg
+            : '모임장 위임에 실패했습니다. (HTTP ${response.statusCode})',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: response.statusCode,
+          serverMessage: msg,
+          responseBody: rawBody,
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('[delegate] $e\n$st');
+      if (!mounted) return;
+      await _showMeetingActionFailure(
+        summary: '모임장 위임 중 오류가 발생했습니다.',
+        detailText: _formatMeetingApiDiagnostic(
+          requestUrl: url,
+          statusCode: null,
+          serverMessage: '',
+          responseBody: '',
+          clientException: '$e\n\n$st',
         ),
       );
     }
@@ -279,6 +573,18 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
   Future<void> _showDelegateDialog() async {
     final myId = _myMemberId;
+    if (myId == null || myId <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '내 회원 정보를 확인할 수 없습니다. 로그인 후 다시 시도해 주세요.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final candidates = _meetingMembers
         .where((m) => m.memberId != myId)
         .toList();
@@ -331,19 +637,29 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     return token;
   }
 
-  Future<void> _fetchRetention() async {
-    setState(() {
-      _isLoadingMembers = true;
-      _errorMessage = null;
-    });
+  Future<void> _fetchRetention({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoadingMembers = true;
+        _errorMessage = null;
+      });
+    } else if (mounted) {
+      setState(() => _errorMessage = null);
+    }
 
     try {
       final token = await _getToken();
       if (token == null) {
-        setState(() {
-          _isLoadingMembers = false;
-          _errorMessage = '로그인이 필요합니다.';
-        });
+        if (!silent) {
+          setState(() {
+            _isLoadingMembers = false;
+            _errorMessage = '로그인이 필요합니다.';
+          });
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('로그인이 필요합니다.')),
+          );
+        }
         return;
       }
 
@@ -368,34 +684,56 @@ class _DailyStatusViewState extends State<DailyStatusView> {
             .whereType<Map<String, dynamic>>()
             .map(_RetentionMember.fromJson)
             .toList();
+        if (!mounted) return;
         setState(() {
           _members = members;
-          if (members.isNotEmpty) {
+          if (!silent && members.isNotEmpty) {
             _expandedMemberIds
               ..clear()
               ..add(members.first.memberId);
           }
-          _isLoadingMembers = false;
+          if (!silent) _isLoadingMembers = false;
+          _errorMessage = null;
         });
         return;
       }
 
-      setState(() {
-        _isLoadingMembers = false;
-        _errorMessage = serverMessage.isNotEmpty
-            ? serverMessage
-            : '구성원 정보를 불러오지 못했습니다.';
-      });
+      if (!silent) {
+        setState(() {
+          _isLoadingMembers = false;
+          _errorMessage = serverMessage.isNotEmpty
+              ? serverMessage
+              : '구성원 정보를 불러오지 못했습니다.';
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              serverMessage.isNotEmpty
+                  ? serverMessage
+                  : '구성원 정보를 불러오지 못했습니다.',
+            ),
+          ),
+        );
+      }
     } catch (_) {
-      setState(() {
-        _isLoadingMembers = false;
-        _errorMessage = '네트워크 오류로 구성원 정보를 불러오지 못했습니다.';
-      });
+      if (!silent) {
+        setState(() {
+          _isLoadingMembers = false;
+          _errorMessage = '네트워크 오류로 구성원 정보를 불러오지 못했습니다.';
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('네트워크 오류로 새로고침에 실패했습니다.'),
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _fetchMonthlyStay() async {
-    if (_isLoadingDetail) return;
+  Future<void> _fetchMonthlyStay({bool force = false}) async {
+    if (_isLoadingDetail && !force) return;
     setState(() => _isLoadingDetail = true);
     try {
       final token = await _getToken();
@@ -440,8 +778,8 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     }
   }
 
-  Future<void> _fetchWeeklyStay() async {
-    if (_isLoadingDetail) return;
+  Future<void> _fetchWeeklyStay({bool force = false}) async {
+    if (_isLoadingDetail && !force) return;
     setState(() => _isLoadingDetail = true);
     try {
       final token = await _getToken();
@@ -503,19 +841,11 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   }
 
   String _liveDuration(String? checkIn) {
-    if (checkIn == null || checkIn.isEmpty) return '-';
-    final parts = checkIn.split(':');
-    if (parts.length < 2) return '-';
-
-    final hour = int.tryParse(parts[0]) ?? 0;
-    final minute = int.tryParse(parts[1]) ?? 0;
-    final now = _nowKst();
-    var started = DateTime(now.year, now.month, now.day, hour, minute);
-    if (started.isAfter(now)) {
-      started = started.subtract(const Duration(days: 1));
-    }
-
-    final diff = now.difference(started);
+    final diff = KstCalendar.elapsedSinceCheckIn(
+      checkIn,
+      legacyUtcWallOnDate: KstCalendar.ymdFromInstant(DateTime.now()),
+    );
+    if (diff == null) return '-';
     final h = diff.inHours;
     final m = diff.inMinutes % 60;
     if (h <= 0) return '$m분';
@@ -536,15 +866,15 @@ class _DailyStatusViewState extends State<DailyStatusView> {
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.primary,
-          onRefresh: _loadInitialData,
+          onRefresh: _pullRefresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
             children: [
               _buildHeader(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               _buildLegendSection(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               if (_isLoadingMembers)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),
@@ -588,7 +918,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
               onPressed: () => Navigator.pop(context),
               visualDensity: VisualDensity.compact,
             ),
@@ -597,7 +927,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                 widget.meeting.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
               ),
             ),
             if (_isLeader &&
@@ -605,13 +935,13 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                 _inviteCode!.isNotEmpty)
               IconButton(
                 tooltip: '초대 코드 복사',
-                icon: const Icon(Icons.copy_rounded, size: 22),
+                icon: const Icon(Icons.copy_rounded, size: 20),
                 onPressed: _copyInviteCode,
                 visualDensity: VisualDensity.compact,
               ),
             _buildToggleButtons(),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded, size: 22),
+              icon: const Icon(Icons.more_vert_rounded, size: 20),
               onSelected: (value) async {
                 switch (value) {
                   case 'delegate':
@@ -647,8 +977,25 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         const SizedBox(height: 4),
         const Text(
           '랩실 구성원 출석 현황',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
         ),
+        if (_isLeader) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _showDelegateDialog,
+              icon: const Icon(Icons.how_to_reg_outlined, size: 16),
+              label: const Text('모임장 위임'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -693,7 +1040,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -702,7 +1049,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         ),
         child: Icon(
           icon,
-          size: 18,
+          size: 16,
           color: selected ? Colors.black87 : Colors.grey.shade600,
         ),
       ),
@@ -711,30 +1058,30 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
   Widget _buildLegendSection() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF3EDE6),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
           Text(
             '출석 빈도:',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               color: Colors.grey.shade700,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 10),
-          ...[0.15, 0.3, 0.5, 0.7, 1.0].map(
-            (o) => Container(
-              width: 18,
-              height: 18,
-              margin: const EdgeInsets.only(right: 4),
+          const SizedBox(width: 8),
+          ...StayHeatmap.legendColors.map(
+            (c) => Container(
+              width: 15,
+              height: 15,
+              margin: const EdgeInsets.only(right: 3),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
-                color: AppColors.primary.withOpacity(o),
+                color: c,
               ),
             ),
           ),
@@ -754,12 +1101,12 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     final isExpanded = _expandedMemberIds.contains(member.memberId);
     final percentage = _attendanceRate(member.memberId);
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
       surfaceTintColor: Colors.transparent,
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
       child: Theme(
@@ -777,39 +1124,55 @@ class _DailyStatusViewState extends State<DailyStatusView> {
             }
           });
         },
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
         title: Row(
           children: [
             CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.primary.withOpacity(0.14),
+              radius: 14,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.14),
               child: Text(
                 member.initial,
                 style: const TextStyle(
                   color: AppColors.primary,
-                  fontSize: 18,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    member.name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        member.isPresent
+                            ? Icons.check_rounded
+                            : Icons.close_rounded,
+                        size: 17,
+                        color: member.isPresent
+                            ? const Color(0xFF2E7D32)
+                            : const Color(0xFFC62828),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          member.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   Text(
                     member.isPresent
-                        ? '체크인 ${member.checkIn ?? '-'}'
-                        : '마지막 퇴실 ${member.lastExit ?? '-'}',
+                        ? '체크인 ${KstCalendar.formatCheckTimeForDisplay(member.checkIn, assumeUtcWallOnDate: KstCalendar.ymdFromInstant(DateTime.now()))}'
+                        : '마지막 퇴실 ${KstCalendar.formatDateTimeKstDisplay(member.lastExit)}',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
                   ),
@@ -822,7 +1185,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                 Text(
                   '$percentage %',
                   style: const TextStyle(
-                    fontSize: 24,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.primary,
                   ),
@@ -832,7 +1195,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                       ? '잔류 ${_liveDuration(member.checkIn)}'
                       : '출석률',
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 9,
                     color: AppColors.textSecondary,
                   ),
                 ),
@@ -842,7 +1205,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         ),
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
             child: _isListView
                 ? _buildWeeklyList(member.memberId)
                 : _buildMonthlyHeatmap(member.memberId),
@@ -854,23 +1217,20 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   }
 
   Widget _buildMonthlyHeatmap(int memberId) {
-    const double cell = 12;
-    const double gap = 2;
-    const double leftGutter = 30;
-    const double rightGutter = 34;
-    const double gridW = 7 * (cell + gap);
-
     final records = _monthlyByMember[memberId] ?? [];
     final byDate = {
       for (final r in records) r.dateOnly: r.stayMinutes,
     };
 
-    final now = _nowKst();
-    final first = now.subtract(const Duration(days: 29));
-    final dates = List.generate(
-      30,
-      (i) => DateTime(first.year, first.month, first.day + i),
-    );
+    final dateKeys = KstCalendar.consecutiveKstYmdEndingToday(30);
+    final dates = dateKeys.map((k) {
+      final p = k.split('-').map(int.parse).toList();
+      return DateTime.utc(p[0], p[1], p[2]);
+    }).toList();
+
+    String gridDateKey(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
     final leading = dates.first.weekday - 1;
     final cells = <DateTime?>[
       ...List<DateTime?>.filled(leading, null),
@@ -885,99 +1245,137 @@ class _DailyStatusViewState extends State<DailyStatusView> {
       weekRows.add(cells.sublist(i, i + 7));
     }
 
-    Widget heatCell(DateTime? d) {
-      final minutes = d == null ? 0 : (byDate[_dateKey(d)] ?? 0);
-      return Padding(
-        padding: const EdgeInsets.all(gap / 2),
-        child: Container(
-          width: cell,
-          height: cell,
-          decoration: BoxDecoration(
-            color: d == null ? Colors.transparent : _heatColor(minutes),
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double gap = 3;
+        const double leftGutter = 28;
+        const double rightGutter = 40;
+        final maxW = constraints.maxWidth;
+        double cell = 18;
+        if (maxW.isFinite && maxW > leftGutter + rightGutter + 7 * gap) {
+          cell = ((maxW - leftGutter - rightGutter - 7 * gap) / 7)
+              .clamp(12.0, 24.0);
+        }
+        final gridW = 7 * (cell + gap);
+        final blockW = leftGutter + gridW + rightGutter;
 
-    const weekdayStyle = TextStyle(fontSize: 10, color: Colors.grey);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            const SizedBox(width: leftGutter),
-            SizedBox(
-              width: gridW,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Expanded(child: Center(child: Text('월', style: weekdayStyle))),
-                  Expanded(child: Center(child: Text('화', style: weekdayStyle))),
-                  Expanded(child: Center(child: Text('수', style: weekdayStyle))),
-                  Expanded(child: Center(child: Text('목', style: weekdayStyle))),
-                  Expanded(child: Center(child: Text('금', style: weekdayStyle))),
-                  Expanded(child: Center(child: Text('토', style: weekdayStyle))),
-                  Expanded(child: Center(child: Text('일', style: weekdayStyle))),
-                ],
+        Widget heatCell(DateTime? d) {
+          final minutes = d == null ? 0 : (byDate[gridDateKey(d)] ?? 0);
+          return Padding(
+            padding: const EdgeInsets.all(gap / 2),
+            child: Container(
+              width: cell,
+              height: cell,
+              decoration: BoxDecoration(
+                color: d == null
+                    ? Colors.transparent
+                    : StayHeatmap.colorForTotalMinutes(minutes),
+                borderRadius: BorderRadius.circular(4),
               ),
             ),
-            const SizedBox(width: rightGutter),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ...List.generate(weekRows.length, (weekIdx) {
-          final row = weekRows[weekIdx];
-          final rowMinutes = row.fold<int>(0, (sum, d) {
-            if (d == null) return sum;
-            final key = _dateKey(d);
-            return sum + (byDate[key] ?? 0);
-          });
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 1),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+          );
+        }
+
+        const weekdayStyle = TextStyle(fontSize: 11, color: Colors.grey);
+        final heatColumn = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 SizedBox(
                   width: leftGutter,
-                  child: Text(
-                    '${weekIdx + 1}주',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: const SizedBox.shrink(),
                 ),
                 SizedBox(
                   width: gridW,
-                  child: Row(
-                    children: row.map(heatCell).toList(),
+                  child: const Row(
+                    children: [
+                      Expanded(
+                          child: Center(child: Text('월', style: weekdayStyle))),
+                      Expanded(
+                          child: Center(child: Text('화', style: weekdayStyle))),
+                      Expanded(
+                          child: Center(child: Text('수', style: weekdayStyle))),
+                      Expanded(
+                          child: Center(child: Text('목', style: weekdayStyle))),
+                      Expanded(
+                          child: Center(child: Text('금', style: weekdayStyle))),
+                      Expanded(
+                          child: Center(child: Text('토', style: weekdayStyle))),
+                      Expanded(
+                          child: Center(child: Text('일', style: weekdayStyle))),
+                    ],
                   ),
                 ),
-                SizedBox(
-                  width: rightGutter,
-                  child: Text(
-                    rowMinutes <= 0
-                        ? ''
-                        : rowMinutes >= 60
-                            ? '${(rowMinutes / 60).toStringAsFixed(1)}h'
-                            : '${rowMinutes}m',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 9, color: Colors.grey),
-                  ),
-                ),
+                const SizedBox(width: rightGutter),
               ],
             ),
-          );
-        }),
-      ],
+            const SizedBox(height: 6),
+            ...List.generate(weekRows.length, (weekIdx) {
+              final row = weekRows[weekIdx];
+              final rowMinutes = row.fold<int>(0, (sum, d) {
+                if (d == null) return sum;
+                final key = gridDateKey(d);
+                return sum + (byDate[key] ?? 0);
+              });
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: leftGutter,
+                      child: Text(
+                        '${weekIdx + 1}주',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: gridW,
+                      child: Row(
+                        children: row.map(heatCell).toList(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: rightGutter,
+                      child: Text(
+                        rowMinutes <= 0
+                            ? ''
+                            : rowMinutes >= 60
+                                ? '${(rowMinutes / 60).toStringAsFixed(1)}h'
+                                : '${rowMinutes}m',
+                        textAlign: TextAlign.right,
+                        style:
+                            const TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+
+        return Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: blockW,
+            child: heatColumn,
+          ),
+        );
+      },
     );
   }
 
   Widget _buildWeeklyList(int memberId) {
-    final records = _weeklyByMember[memberId] ?? [];
+    final raw = _weeklyByMember[memberId] ?? [];
+    final records = List<_WeeklyInOutRecord>.of(raw)
+      ..sort((a, b) => b.date.compareTo(a.date));
     if (records.isEmpty) {
       return Container(
         width: double.infinity,
@@ -1036,8 +1434,28 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                     ),
                   ),
                 ),
-                Expanded(flex: 2, child: Text(record.checkIn ?? '-', style: const TextStyle(fontSize: 13))),
-                Expanded(flex: 2, child: Text(record.checkOut ?? '-', style: const TextStyle(fontSize: 13))),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    KstCalendar.formatCheckTimeForDisplay(
+                      record.checkIn,
+                      assumeUtcWallOnDate:
+                          KstCalendar.apiDateToKstYmd(record.date),
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    KstCalendar.formatCheckTimeForDisplay(
+                      record.checkOut,
+                      assumeUtcWallOnDate:
+                          KstCalendar.apiDateToKstYmd(record.date),
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
               ],
             ),
           );
@@ -1046,53 +1464,11 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     );
   }
 
-  Color _heatColor(int stayMinutes) {
-    if (stayMinutes <= 0) return Colors.grey.shade100;
-    if (stayMinutes < 60) return AppColors.primary.withOpacity(0.25);
-    if (stayMinutes < 180) return AppColors.primary.withOpacity(0.5);
-    if (stayMinutes < 300) return AppColors.primary.withOpacity(0.75);
-    return AppColors.primary;
-  }
-
-  String _dateKey(DateTime d) {
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '${d.year}-$m-$day';
-  }
-
   String _friendlyDate(String date) {
-    final normalized = _normalizeDateAsKst(date);
+    final normalized = KstCalendar.apiDateToKstYmd(date);
     final parts = normalized.split('-');
     if (parts.length != 3) return normalized;
     return '${int.tryParse(parts[1]) ?? parts[1]}월 ${int.tryParse(parts[2]) ?? parts[2]}일';
-  }
-
-  String _normalizeDateAsKst(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) return text;
-
-    if (text.contains('T') || text.contains('Z') || text.contains('+')) {
-      final parsed = DateTime.tryParse(text);
-      if (parsed != null) {
-        final kst = parsed.toUtc().add(const Duration(hours: 9));
-        final m = kst.month.toString().padLeft(2, '0');
-        final d = kst.day.toString().padLeft(2, '0');
-        return '${kst.year}-$m-$d';
-      }
-    }
-
-    if (text.contains(' ')) {
-      final converted = text.replaceFirst(' ', 'T');
-      final parsed = DateTime.tryParse(converted);
-      if (parsed != null) {
-        final kst = parsed.toUtc().add(const Duration(hours: 9));
-        final m = kst.month.toString().padLeft(2, '0');
-        final d = kst.day.toString().padLeft(2, '0');
-        return '${kst.year}-$m-$d';
-      }
-    }
-
-    return text.split('T').first;
   }
 }
 
@@ -1115,7 +1491,7 @@ class _MeetingMemberRow {
     return _MeetingMemberRow(
       memberId: id,
       nickname: json['nickname']?.toString() ?? '',
-      role: meetingRoleFromApi(json['role']),
+      role: meetingRoleFromApi(json['role'] ?? json['meetingRole']),
     );
   }
 }
@@ -1140,13 +1516,20 @@ class _RetentionMember {
   factory _RetentionMember.fromJson(Map<String, dynamic> json) {
     final name = (json['name'] ?? '').toString();
     final initial = (json['initial'] ?? '').toString();
+    String? pick(String a, String b) {
+      final v = json[a] ?? json[b];
+      if (v == null) return null;
+      final s = v.toString();
+      return s.isEmpty ? null : s;
+    }
+
     return _RetentionMember(
       memberId: (json['memberId'] as int?) ?? 0,
       name: name,
       initial: initial.isNotEmpty ? initial : (name.isNotEmpty ? name[0] : '?'),
       isPresent: json['isPresent'] as bool? ?? false,
-      checkIn: json['checkIn']?.toString(),
-      lastExit: json['lastExit']?.toString(),
+      checkIn: pick('checkIn', 'startTime'),
+      lastExit: pick('lastExit', 'endTime'),
     );
   }
 }
@@ -1163,10 +1546,22 @@ class _WeeklyInOutRecord {
   final String? checkOut;
 
   factory _WeeklyInOutRecord.fromJson(Map<String, dynamic> json) {
+    String? pick(String a, String b) {
+      final v = json[a] ?? json[b];
+      if (v == null) return null;
+      final s = v.toString();
+      return s.isEmpty ? null : s;
+    }
+
+    final rawDate = (json['date'] ?? '').toString();
+    final dateOnly = rawDate.contains('T') || rawDate.contains(' ')
+        ? KstCalendar.apiDateToKstYmd(rawDate)
+        : rawDate.split('T').first;
+
     return _WeeklyInOutRecord(
-      date: (json['date'] ?? '').toString(),
-      checkIn: json['checkIn']?.toString(),
-      checkOut: json['checkOut']?.toString(),
+      date: dateOnly.isNotEmpty ? dateOnly : rawDate,
+      checkIn: pick('checkIn', 'startTime'),
+      checkOut: pick('checkOut', 'endTime'),
     );
   }
 }
@@ -1182,35 +1577,8 @@ class _MonthlyStayRecord {
 
   factory _MonthlyStayRecord.fromJson(Map<String, dynamic> json) {
     final rawDate = (json['date'] ?? '').toString();
-    final dateOnly = _toKstDateOnly(rawDate);
+    final dateOnly = KstCalendar.apiDateToKstYmd(rawDate);
     final minutes = json['stayMinutes'] as int? ?? 0;
     return _MonthlyStayRecord(dateOnly: dateOnly, stayMinutes: minutes);
-  }
-
-  static String _toKstDateOnly(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) return text;
-
-    if (text.contains('T') || text.contains('Z') || text.contains('+')) {
-      final parsed = DateTime.tryParse(text);
-      if (parsed != null) {
-        final kst = parsed.toUtc().add(const Duration(hours: 9));
-        final m = kst.month.toString().padLeft(2, '0');
-        final d = kst.day.toString().padLeft(2, '0');
-        return '${kst.year}-$m-$d';
-      }
-    }
-
-    if (text.contains(' ')) {
-      final parsed = DateTime.tryParse(text.replaceFirst(' ', 'T'));
-      if (parsed != null) {
-        final kst = parsed.toUtc().add(const Duration(hours: 9));
-        final m = kst.month.toString().padLeft(2, '0');
-        final d = kst.day.toString().padLeft(2, '0');
-        return '${kst.year}-$m-$d';
-      }
-    }
-
-    return text.split('T').first;
   }
 }

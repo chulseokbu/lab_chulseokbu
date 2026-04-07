@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 /**
  * 랩실·출석 비즈니스 기준 시각(한국 표준시).
@@ -26,5 +27,16 @@ public final class KoreaTime {
 
     public static LocalDateTime nowDateTime() {
         return LocalDateTime.now(ZONE);
+    }
+
+    /**
+     * JSON 응답용: 해당 출석일의 시각을 KST 오프셋이 붙은 ISO-8601로 직렬화한다.
+     * (프론트가 순수 HH:mm 을 기기 로컬/추측으로 해석하지 않도록)
+     */
+    public static String formatOffsetDateTime(LocalDate date, LocalTime time) {
+        if (date == null || time == null) {
+            return null;
+        }
+        return date.atTime(time).atZone(ZONE).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 }
