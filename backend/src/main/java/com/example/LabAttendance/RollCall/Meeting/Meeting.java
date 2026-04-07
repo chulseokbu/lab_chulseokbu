@@ -1,34 +1,58 @@
 package com.example.LabAttendance.RollCall.Meeting;
 
+import com.example.LabAttendance.RollCall.Member.Member;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
-@Table(name = "meetings")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
+@Table(
+        name = "meeting",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_meeting_code", columnNames = {"code"})
+        },
+        indexes = {
+                @Index(name = "idx_meeting_code", columnList = "code")
+        }
+)
 public class Meeting {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 200)
-    private String name;
-
-    @Column(nullable = false, unique = true, length = 64)
-    private String inviteCode;
+    @Column(nullable = false, length = 6)
+    private String code;
 
     @Column(nullable = false)
-    private Instant createdAt;
+    private String name;
 
-    public Meeting(String name, String inviteCode, Instant createdAt) {
+    @Column(nullable = false)
+    private LocalDate createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_member_id")
+    private Member createdBy;
+
+    @OneToMany(mappedBy = "meeting", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<MeetingMember> members = new ArrayList<>();
+
+    public Meeting(String code, String name, Member createdBy) {
+        this.code = code;
         this.name = name;
-        this.inviteCode = inviteCode;
-        this.createdAt = createdAt;
+        this.createdBy = createdBy;
+        this.createdAt = LocalDate.now();
+    }
+
+    /** 모임장(생성자) 변경 — 탈퇴·위임 시에만 사용 */
+    public void setCreatedBy(Member member) {
+        this.createdBy = member;
     }
 }
+

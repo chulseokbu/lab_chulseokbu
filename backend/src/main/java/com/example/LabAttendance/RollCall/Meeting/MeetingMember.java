@@ -2,20 +2,25 @@ package com.example.LabAttendance.RollCall.Meeting;
 
 import com.example.LabAttendance.RollCall.Member.Member;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "meeting_memberships",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"meeting_id", "member_id"})
-)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class MeetingMembership {
+@NoArgsConstructor
+@Table(
+        name = "meeting_member",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_meeting_member", columnNames = {"meeting_id", "member_id"})
+        },
+        indexes = {
+                @Index(name = "idx_meeting_member_meeting", columnList = "meeting_id"),
+                @Index(name = "idx_meeting_member_member", columnList = "member_id")
+        }
+)
+public class MeetingMember {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,21 +34,13 @@ public class MeetingMembership {
     @JoinColumn(name = "member_id")
     private Member member;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private MeetingRole role;
-
     @Column(nullable = false)
-    private Instant joinedAt;
+    private LocalDateTime joinedAt;
 
-    public MeetingMembership(Meeting meeting, Member member, MeetingRole role, Instant joinedAt) {
+    public MeetingMember(Meeting meeting, Member member) {
         this.meeting = meeting;
         this.member = member;
-        this.role = role;
-        this.joinedAt = joinedAt;
-    }
-
-    void setRole(MeetingRole role) {
-        this.role = role;
+        this.joinedAt = LocalDateTime.now();
     }
 }
+

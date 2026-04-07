@@ -6,6 +6,7 @@ import com.example.LabAttendance.RollCall.InOut.InOutRepository;
 import com.example.LabAttendance.RollCall.Member.Member;
 import com.example.LabAttendance.RollCall.Member.MemberRepository;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckInException;
+import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckOutException;
 import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayException;
 import com.example.LabAttendance.RollCall.global.Gender;
 import jakarta.persistence.EntityNotFoundException;
@@ -15,20 +16,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class AttendanceServiceTest {
 
     @InjectMocks
@@ -44,92 +41,115 @@ class AttendanceServiceTest {
     InOutRepository inOutRepository;
 
     Member member;
-    Attendance attendance;
-    InOut inOut;
 
     @BeforeEach
     void setUp() {
-        member = new Member(null, 20250001L, "Tom", "pw", "tom@test.com", "01012345678", Gender.MALE, null);
+        member = new Member();
         ReflectionTestUtils.setField(member, "id", 1L);
-
-        attendance = mock(Attendance.class);
-        when(attendance.getStatus()).thenReturn(AttendanceStatus.IN);
-
-        inOut = new InOut();
-        ReflectionTestUtils.setField(inOut, "id", 15L);
+        ReflectionTestUtils.setField(member, "memberNum", 20250001L);
+        ReflectionTestUtils.setField(member, "nickname", "Tom");
+        ReflectionTestUtils.setField(member, "password", "encoded-password");
+        ReflectionTestUtils.setField(member, "email", "tom@test.com");
+        ReflectionTestUtils.setField(member, "phone", "01012345678");
+        ReflectionTestUtils.setField(member, "gender", Gender.MALE);
     }
 
     @Test
-    void checkInLab_throws_whenMemberNotFound() {
-        when(memberRepository.findById(1L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> attendanceService.checkInLab(1L))
-                .isInstanceOf(EntityNotFoundException.class);
-    }
-
-    @Test
-    void checkInLab_throws_whenAlreadyCheckedIn() {
+    void checkInLab_shouldCreateNewAttendanceAndInOut_whenFirstCheckInToday() {
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(attendanceRepository.findByIdAndDate(1L, LocalDate.now())).thenReturn(Optional.of(attendance));
-        when(attendance.getStatus()).thenReturn(AttendanceStatus.IN);
-
-        assertThatThrownBy(() -> attendanceService.checkInLab(1L))
-                .isInstanceOf(AlreadyCheckInException.class)
-                .hasMessageContaining("이미 체크인");
-    }
-
-    @Test
-    void checkInLab_createsAttendanceAndReturnsInOutId_whenNoAttendanceToday() {
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(attendanceRepository.findByIdAndDate(1L, LocalDate.now())).thenReturn(Optional.empty());
-        when(attendanceRepository.save(any(Attendance.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(inOutRepository.save(any(InOut.class))).thenAnswer(inv -> {
-            InOut io = inv.getArgument(0);
-            ReflectionTestUtils.setField(io, "id", 99L);
+        when(attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now()))
+                .thenReturn(Optional.empty());
+        when(inOutRepository.save(any(InOut.class))).thenAnswer(invocation -> {
+            InOut io = invocation.getArgument(0);
+            ReflectionTestUtils.setField(io, "id", 10L);
             return io;
         });
 
-        Long checkInId = attendanceService.checkInLab(1L);
+        Long inoutId = attendanceService.checkInLab(1L);
 
-        assertThat(checkInId).isEqualTo(99L);
-        verify(attendanceRepository, atLeastOnce()).save(any(Attendance.class));
+        assertThat(inoutId).isEqualTo(10L);
+        verify(attendanceRepository, times(2)).save(any(Attendance.class));
         verify(inOutRepository).save(any(InOut.class));
     }
 
     @Test
-    void checkOutLab_updates_whenValidInOut() throws NotAttendanceTodayException {
+    void checkInLab_shouldThrow_whenAlreadyCheckedIn() {
+        Attendance attendance = new Attendance();
+        ReflectionTestUtils.setField(attendance, "member", member);
+        ReflectionTestUtils.setField(attendance, "date", LocalDate.now());
+        ReflectionTestUtils.setField(attendance, "total", 0L);
+        ReflectionTestUtils.setField(attendance, "status", AttendanceStatus.IN);
+
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(inOutRepository.findById(15L)).thenReturn(Optional.of(inOut));
-        inOut.checkStart(attendance, java.time.LocalTime.of(9, 0));
-        ReflectionTestUtils.setField(inOut, "attendance", attendance);
-        when(attendance.getStatus()).thenReturn(AttendanceStatus.IN);
-        when(attendanceRepository.findByIdAndDate(1L, LocalDate.now())).thenReturn(Optional.of(attendance));
+        when(attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now()))
+                .thenReturn(Optional.of(attendance));
 
-        attendanceService.checkOutLab(1L, 15L);
+        assertThatThrownBy(() -> attendanceService.checkInLab(1L))
+                .isInstanceOf(AlreadyCheckInException.class);
+    }
 
+    @Test
+    void checkOutLab_shouldEndInOutAndUpdateAttendance_whenValid() throws NotAttendanceTodayException {
+        Attendance attendance = new Attendance();
+        ReflectionTestUtils.setField(attendance, "member", member);
+        ReflectionTestUtils.setField(attendance, "date", LocalDate.now());
+        ReflectionTestUtils.setField(attendance, "total", 0L);
+        ReflectionTestUtils.setField(attendance, "status", AttendanceStatus.IN);
+
+        InOut inOut = new InOut();
+        inOut.checkStart(attendance, LocalTime.now().minusMinutes(5));
+        ReflectionTestUtils.setField(inOut, "id", 10L);
+
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(inOutRepository.findById(10L)).thenReturn(Optional.of(inOut));
+        when(attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now()))
+                .thenReturn(Optional.of(attendance));
+
+        attendanceService.checkOutLab(1L, 10L);
+
+        assertThat(inOut.getEndTime()).isNotNull();
+        assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.OUT);
         verify(attendanceRepository).save(attendance);
         verify(inOutRepository).save(inOut);
     }
 
     @Test
-    void checkOutLab_throws_whenNoAttendanceToday() {
+    void checkOutLab_shouldThrow_whenNoAttendanceToday() {
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(inOutRepository.findById(15L)).thenReturn(Optional.of(inOut));
-        inOut.checkStart(attendance, java.time.LocalTime.of(9, 0));
-        ReflectionTestUtils.setField(inOut, "attendance", attendance);
-        when(attendance.getStatus()).thenReturn(AttendanceStatus.OUT);
+        when(inOutRepository.findById(10L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> attendanceService.checkOutLab(1L, 15L))
-                .isInstanceOf(NotAttendanceTodayException.class)
-                .hasMessageContaining("체크인한 이력이 없습니다");
+        assertThatThrownBy(() -> attendanceService.checkOutLab(1L, 10L))
+                .isInstanceOf(EntityNotFoundException.class)
+                .hasMessageContaining("출입 내역이 없습니다");
     }
 
     @Test
-    void checkOutLab_throws_whenMemberNotFound() {
+    void checkOutLab_shouldThrow_whenAlreadyCheckedOut() {
+        Attendance attendance = new Attendance();
+        ReflectionTestUtils.setField(attendance, "member", member);
+        ReflectionTestUtils.setField(attendance, "date", LocalDate.now());
+        ReflectionTestUtils.setField(attendance, "total", 0L);
+        ReflectionTestUtils.setField(attendance, "status", AttendanceStatus.IN);
+
+        InOut inOut = new InOut();
+        inOut.checkStart(attendance, LocalTime.now().minusMinutes(5));
+        inOut.checkEnd(LocalTime.now().minusMinutes(1));
+        ReflectionTestUtils.setField(inOut, "id", 10L);
+
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(inOutRepository.findById(10L)).thenReturn(Optional.of(inOut));
+
+        assertThatThrownBy(() -> attendanceService.checkOutLab(1L, 10L))
+                .isInstanceOf(AlreadyCheckOutException.class)
+                .hasMessageContaining("이미 처리된 출석 기록입니다.");
+    }
+
+    @Test
+    void checkOutLab_shouldThrow_whenMemberNotFound() {
         when(memberRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> attendanceService.checkOutLab(1L, 15L))
+        assertThatThrownBy(() -> attendanceService.checkOutLab(1L, 10L))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("로그인 먼저");
+                .hasMessageContaining("로그인 먼저 진행해 주세요");
     }
 }

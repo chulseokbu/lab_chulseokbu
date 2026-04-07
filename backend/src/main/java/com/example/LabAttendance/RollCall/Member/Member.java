@@ -41,4 +41,10 @@ public class Member {
 
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Attendance> attandenceList = new ArrayList<>();
+
+    public void updateProfile(String nickname, String email, String phone) {
+        this.nickname = nickname;
+        this.email = email;
+        this.phone = phone;
+    }
 }

@@ -3,23 +3,24 @@ package com.example.LabAttendance.RollCall.Member;
 import com.example.LabAttendance.RollCall.Member.DTO.*;
 import com.example.LabAttendance.RollCall.global.Exception.DuplicateEmailException;
 import com.example.LabAttendance.RollCall.global.Exception.MemberNotFoundException;
-import com.example.LabAttendance.RollCall.global.ResponneType.NoDataApiResponse;
+import com.example.LabAttendance.RollCall.global.jwt.TokenBlacklistService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @Tag(
         name = "Member",
@@ -28,7 +29,9 @@ import org.springframework.web.bind.annotation.*;
 
                 - 회원 가입
                 - 로그인
-                - 계정 탈퇴(비밀번호 확인, 모임 자동 정리 후 회원 삭제)
+                - 로그아웃
+                - 프로필 수정
+                - 회원 탈퇴
                 - 이메일 중복, 인증 실패 등의 예외를 처리합니다.
                 """
 )
@@ -38,6 +41,7 @@ import org.springframework.web.bind.annotation.*;
 public class MemberController {
 
     private final MemberService memberService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Operation(
             summary = "회원 가입",
@@ -230,38 +234,207 @@ public class MemberController {
     }
 
     @Operation(
-            summary = "계정 탈퇴",
+            summary = "로그아웃",
             description = """
-                    비밀번호 확인 후 계정을 삭제합니다.
+                    현재 로그인된 사용자를 로그아웃 처리합니다.
 
-                    ### 모임 처리
-                    - 참여 중인 모든 모임에서 탈퇴합니다.
-                    - 해당 회원이 **모임장**이었던 모임은, 모임 **단독 탈퇴**와 동일한 규칙이 적용됩니다.
-                      가입 시점이 가장 이른 구성원이 모임장으로 승격하고, 다른 구성원이 없으면 모임이 삭제됩니다.
+                    ### 처리 흐름
+                    1. Authorization 헤더에서 JWT 토큰을 추출합니다.
+                    2. 해당 토큰을 블랙리스트에 등록하여 재사용을 차단합니다.
 
-                    ### 기타 데이터
-                    - 출석 등 회원에 연쇄 삭제되도록 매핑된 데이터는 JPA 설정에 따라 함께 정리됩니다.
-                    """
+                    ### 요청 헤더
+                    - `Authorization: Bearer {token}`
+                    """,
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "로그아웃 성공",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            name = "logout-success",
+                                            summary = "로그아웃 성공",
+                                            value = """
+                                                    {
+                                                      "message": "로그아웃 되었습니다."
+                                                    }
+                                                    """
+                                    )
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "인증 토큰 없음 또는 만료",
+                            content = @Content(mediaType = "application/json")
+                    )
+            }
     )
-    @DeleteMapping("/me")
-    public ResponseEntity<?> withdraw(
-            @Parameter(name = "memberId", in = ParameterIn.HEADER, required = true)
-            @AuthenticationPrincipal Long memberId,
-            @Valid @RequestBody AccountWithdrawRequestDto request,
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+        String token = resolveToken(request);
+        if (token != null) {
+            tokenBlacklistService.blacklist(token);
+        }
+        return ResponseEntity.ok(Map.of("message", "로그아웃 되었습니다."));
+    }
+
+    @Operation(
+            summary = "프로필 수정",
+            description = """
+                    로그인한 사용자의 프로필 정보(닉네임, 이메일, 전화번호)를 수정합니다.
+
+                    ### 변경 가능 필드
+                    - 닉네임
+                    - 이메일
+                    - 전화번호
+
+                    ### 요청 헤더
+                    - `Authorization: Bearer {token}`
+                    """,
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "수정 성공",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = MemberProfileResponseDto.class),
+                                    examples = @ExampleObject(
+                                            name = "profile-update-success",
+                                            summary = "프로필 수정 성공",
+                                            value = """
+                                                    {
+                                                      "id": 1,
+                                                      "memberId": 20250001,
+                                                      "nickname": "Tom",
+                                                      "email": "tom@test.com",
+                                                      "phone": "01012345678"
+                                                    }
+                                                    """
+                                    )
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "400",
+                            description = "입력값 검증 실패",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "인증 토큰 없음 또는 만료",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "회원을 찾을 수 없음",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "409",
+                            description = "이메일 중복",
+                            content = @Content(
+                                    mediaType = "text/plain",
+                                    examples = @ExampleObject(
+                                            name = "duplicate-email",
+                                            value = "이미 존재하는 이메일입니다: new@test.com"
+                                    )
+                            )
+                    )
+            }
+    )
+    @PatchMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @Valid @RequestBody ProfileUpdateRequestDto requestDto,
             BindingResult bindingResult
     ) {
         if (bindingResult.hasErrors()) {
             return ResponseEntity.badRequest().body(bindingResult.getFieldErrors());
         }
+
+        Long memberId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
         try {
-            memberService.withdrawAccount(memberId, request.password());
-            return ResponseEntity.ok(NoDataApiResponse.success("회원 탈퇴가 완료되었습니다."));
+            MemberProfileResponseDto responseDto = memberService.updateProfile(memberId, requestDto);
+            return ResponseEntity.ok(responseDto);
         } catch (MemberNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse.failure(e.getMessage()));
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(com.example.LabAttendance.RollCall.global.ResponneType.ApiResponse.failure(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (DuplicateEmailException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         }
+    }
+
+    @Operation(
+            summary = "회원 탈퇴",
+            description = """
+                    현재 로그인된 사용자의 계정을 삭제합니다.
+
+                    ### 처리 흐름
+                    1. JWT 토큰에서 회원 ID를 추출합니다.
+                    2. 해당 회원이 참여한 모임 정보를 정리합니다.
+                    3. 회원 정보 및 관련 데이터(출석 기록 등)를 삭제합니다.
+                    4. 사용 중이던 토큰을 블랙리스트에 등록합니다.
+
+                    ### 요청 헤더
+                    - `Authorization: Bearer {token}`
+                    """,
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "회원 탈퇴 성공",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            name = "withdraw-success",
+                                            summary = "회원 탈퇴 성공",
+                                            value = """
+                                                    {
+                                                      "message": "회원 탈퇴가 완료되었습니다."
+                                                    }
+                                                    """
+                                    )
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "인증 토큰 없음 또는 만료",
+                            content = @Content(mediaType = "application/json")
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "회원을 찾을 수 없음",
+                            content = @Content(
+                                    mediaType = "text/plain",
+                                    examples = @ExampleObject(
+                                            name = "member-not-found",
+                                            summary = "회원 없음",
+                                            value = "존재하지 않는 회원입니다."
+                                    )
+                            )
+                    )
+            }
+    )
+    @DeleteMapping("/withdraw")
+    public ResponseEntity<?> withdraw(HttpServletRequest request) {
+        Long memberId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        try {
+            memberService.withdraw(memberId);
+        } catch (MemberNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+
+        String token = resolveToken(request);
+        if (token != null) {
+            tokenBlacklistService.blacklist(token);
+        }
+
+        return ResponseEntity.ok(Map.of("message", "회원 탈퇴가 완료되었습니다."));
+    }
+
+    private String resolveToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        return null;
     }
 }

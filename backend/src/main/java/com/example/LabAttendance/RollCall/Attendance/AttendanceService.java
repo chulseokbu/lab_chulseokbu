@@ -6,10 +6,12 @@ import com.example.LabAttendance.RollCall.InOut.InOutRepository;
 import com.example.LabAttendance.RollCall.Member.Member;
 import com.example.LabAttendance.RollCall.Member.MemberRepository;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckInException;
+import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckOutException;
 import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -29,7 +31,7 @@ public class AttendanceService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(EntityNotFoundException::new);
 
-        Attendance entity = attendanceRepository.findByIdAndDate(memberId, LocalDate.now())
+        Attendance entity = attendanceRepository.findByMemberIdAndDate(memberId, LocalDate.now())
                 .orElse(null);
 
         if (entity == null) {
@@ -62,13 +64,27 @@ public class AttendanceService {
         InOut inOut = inOutRepository.findById(inoutId)
                 .orElseThrow(() ->new EntityNotFoundException("출입 내역이 없습니다"));
 
+        if (inOut.getAttendance() == null
+                || inOut.getAttendance().getMember() == null
+                || !inOut.getAttendance().getMember().getId().equals(member.getId())) {
+            throw new EntityNotFoundException("출입 내역이 없습니다");
+        }
+
+        if (!LocalDate.now().equals(inOut.getAttendance().getDate())) {
+            throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
+        }
+
+        if (inOut.getEndTime() != null) {
+            throw new AlreadyCheckOutException("이미 처리된 출석 기록입니다.");
+        }
+
         LocalTime end = LocalTime.now();
         if (inOut.getAttendance().getStatus() != AttendanceStatus.IN){
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
         long inOutMinute= inOut.checkEnd(end);
 
-        Attendance entity = attendanceRepository.findByIdAndDate(member.getId(), LocalDate.now())
+        Attendance entity = attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now())
                 .orElse(null);
 
         if (entity == null) {
@@ -81,6 +97,7 @@ public class AttendanceService {
         inOutRepository.save(inOut);
     }
 
+    @Transactional(readOnly = true)
     public List<DailyStayDto> getLast30Days(Long memberId) {
 
         LocalDate end = LocalDate.now();
