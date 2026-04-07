@@ -9,6 +9,7 @@ import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckInExcepti
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckOutException;
 import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayException;
 import com.example.LabAttendance.RollCall.global.Gender;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,8 +19,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -57,7 +56,7 @@ class AttendanceServiceTest {
     @Test
     void checkInLab_shouldCreateNewAttendanceAndInOut_whenFirstCheckInToday() {
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now()))
+        when(attendanceRepository.findByMemberIdAndDate(member.getId(), KoreaTime.today()))
                 .thenReturn(Optional.empty());
         when(inOutRepository.save(any(InOut.class))).thenAnswer(invocation -> {
             InOut io = invocation.getArgument(0);
@@ -76,12 +75,12 @@ class AttendanceServiceTest {
     void checkInLab_shouldThrow_whenAlreadyCheckedIn() {
         Attendance attendance = new Attendance();
         ReflectionTestUtils.setField(attendance, "member", member);
-        ReflectionTestUtils.setField(attendance, "date", LocalDate.now());
+        ReflectionTestUtils.setField(attendance, "date", KoreaTime.today());
         ReflectionTestUtils.setField(attendance, "total", 0L);
         ReflectionTestUtils.setField(attendance, "status", AttendanceStatus.IN);
 
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now()))
+        when(attendanceRepository.findByMemberIdAndDate(member.getId(), KoreaTime.today()))
                 .thenReturn(Optional.of(attendance));
 
         assertThatThrownBy(() -> attendanceService.checkInLab(1L))
@@ -92,17 +91,17 @@ class AttendanceServiceTest {
     void checkOutLab_shouldEndInOutAndUpdateAttendance_whenValid() throws NotAttendanceTodayException {
         Attendance attendance = new Attendance();
         ReflectionTestUtils.setField(attendance, "member", member);
-        ReflectionTestUtils.setField(attendance, "date", LocalDate.now());
+        ReflectionTestUtils.setField(attendance, "date", KoreaTime.today());
         ReflectionTestUtils.setField(attendance, "total", 0L);
         ReflectionTestUtils.setField(attendance, "status", AttendanceStatus.IN);
 
         InOut inOut = new InOut();
-        inOut.checkStart(attendance, LocalTime.now().minusMinutes(5));
+        inOut.checkStart(attendance, KoreaTime.nowTime().minusMinutes(5));
         ReflectionTestUtils.setField(inOut, "id", 10L);
 
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
         when(inOutRepository.findById(10L)).thenReturn(Optional.of(inOut));
-        when(attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now()))
+        when(attendanceRepository.findByMemberIdAndDate(member.getId(), KoreaTime.today()))
                 .thenReturn(Optional.of(attendance));
 
         attendanceService.checkOutLab(1L, 10L);
@@ -127,13 +126,13 @@ class AttendanceServiceTest {
     void checkOutLab_shouldThrow_whenAlreadyCheckedOut() {
         Attendance attendance = new Attendance();
         ReflectionTestUtils.setField(attendance, "member", member);
-        ReflectionTestUtils.setField(attendance, "date", LocalDate.now());
+        ReflectionTestUtils.setField(attendance, "date", KoreaTime.today());
         ReflectionTestUtils.setField(attendance, "total", 0L);
         ReflectionTestUtils.setField(attendance, "status", AttendanceStatus.IN);
 
         InOut inOut = new InOut();
-        inOut.checkStart(attendance, LocalTime.now().minusMinutes(5));
-        inOut.checkEnd(LocalTime.now().minusMinutes(1));
+        inOut.checkStart(attendance, KoreaTime.nowTime().minusMinutes(5));
+        inOut.checkEnd(KoreaTime.nowTime().minusMinutes(1));
         ReflectionTestUtils.setField(inOut, "id", 10L);
 
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));

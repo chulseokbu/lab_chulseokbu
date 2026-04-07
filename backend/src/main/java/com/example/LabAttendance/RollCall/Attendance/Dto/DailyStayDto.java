@@ -3,6 +3,7 @@ package com.example.LabAttendance.RollCall.Attendance.Dto;
 
 import com.example.LabAttendance.RollCall.Attendance.Attendance;
 import com.example.LabAttendance.RollCall.InOut.InOut;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 
 import java.time.Duration;
 import java.time.LocalTime;
@@ -17,7 +18,7 @@ public record DailyStayDto(
 
     public static DailyStayDto from(Attendance attendance) {
         long minutes = attendance.getTotal() != null ? attendance.getTotal() : 0L;
-        LocalTime now = LocalTime.now();
+        LocalTime now = KoreaTime.nowTime();
         for (InOut io : attendance.getInOuts()) {
             if (io.getEndTime() == null) {
                 long extra = Duration.between(io.getStartTime(), now).toMinutes();
