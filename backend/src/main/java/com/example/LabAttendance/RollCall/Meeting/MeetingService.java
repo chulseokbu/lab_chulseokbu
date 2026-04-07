@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -34,8 +33,6 @@ public class MeetingService {
     private final MemberRepository memberRepository;
     private final AttendanceRepository attendanceRepository;
     private final InOutRepository inOutRepository;
-
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     public MeetingResponseDto createMeeting(Long memberId, MeetingCreateRequestDto req) {
         Member member = memberRepository.findById(memberId)
@@ -117,17 +114,13 @@ public class MeetingService {
             String duration = null;
 
             if (isPresent) {
-                // 오늘 "가장 최근 체크인(현재 열려 있는 세션의 시작시간)" 기준
-                checkIn = latestOpenCheckInTime(todayAttendance);
+                checkIn = latestOpenCheckInIso(todayAttendance);
             } else {
                 Optional<InOut> last = inOutRepository
                         .findTopByAttendance_Member_IdAndEndTimeIsNotNullOrderByAttendance_DateDescEndTimeDesc(mem.getId());
                 if (last.isPresent() && last.get().getAttendance() != null) {
-                    String date = last.get().getAttendance().getDate() != null ? last.get().getAttendance().getDate().toString() : null;
-                    String time = last.get().getEndTime() != null ? last.get().getEndTime().format(TIME_FORMATTER) : null;
-                    if (date != null && time != null) {
-                        lastExit = date + " " + time;
-                    }
+                    var att = last.get().getAttendance();
+                    lastExit = KoreaTime.formatOffsetDateTime(att.getDate(), last.get().getEndTime());
                 }
             }
 
@@ -295,14 +288,13 @@ public class MeetingService {
         return todayAttendance.getInOuts().stream().anyMatch(io -> io.getEndTime() == null);
     }
 
-    private String latestOpenCheckInTime(Attendance todayAttendance) {
+    private String latestOpenCheckInIso(Attendance todayAttendance) {
         if (todayAttendance.getInOuts() == null || todayAttendance.getInOuts().isEmpty()) return null;
         return todayAttendance.getInOuts().stream()
                 .filter(io -> io.getEndTime() == null)
-                .map(InOut::getStartTime)
+                .map(io -> KoreaTime.formatOffsetDateTime(todayAttendance.getDate(), io.getStartTime()))
                 .filter(Objects::nonNull)
-                .max(LocalTime::compareTo)
-                .map(t -> t.format(TIME_FORMATTER))
+                .max(Comparator.naturalOrder())
                 .orElse(null);
     }
 }

@@ -5,8 +5,8 @@ public record MeetingMemberRetentionDto(
         String name,
         String initial,
         boolean isPresent,
-        String checkIn,   // present일 때 (HH:mm)
-        String lastExit,  // absent일 때 (예: "2026-02-05 18:30")
+        String checkIn,   // present일 때 ISO-8601 KST (예: 2026-04-07T13:37:00+09:00)
+        String lastExit,  // absent일 때 동일 형식
         String duration   // present일 때(오늘 누적) 또는 null
 ) {
 }
