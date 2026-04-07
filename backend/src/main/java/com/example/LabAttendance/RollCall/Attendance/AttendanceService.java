@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.LabAttendance.RollCall.global.KoreaTime;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -31,7 +33,7 @@ public class AttendanceService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(EntityNotFoundException::new);
 
-        Attendance entity = attendanceRepository.findByMemberIdAndDate(memberId, LocalDate.now())
+        Attendance entity = attendanceRepository.findByMemberIdAndDate(memberId, KoreaTime.today())
                 .orElse(null);
 
         if (entity == null) {
@@ -48,7 +50,7 @@ public class AttendanceService {
                 entity.toggleAttendance();
             }
         }
-        LocalTime time = LocalTime.now(); // 시작 시간
+        LocalTime time = KoreaTime.nowTime(); // 시작 시간 (KST)
         InOut inOut = new InOut();
         inOut.checkStart(entity,time);
 
@@ -70,7 +72,7 @@ public class AttendanceService {
             throw new EntityNotFoundException("출입 내역이 없습니다");
         }
 
-        if (!LocalDate.now().equals(inOut.getAttendance().getDate())) {
+        if (!KoreaTime.today().equals(inOut.getAttendance().getDate())) {
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
 
@@ -78,13 +80,13 @@ public class AttendanceService {
             throw new AlreadyCheckOutException("이미 처리된 출석 기록입니다.");
         }
 
-        LocalTime end = LocalTime.now();
+        LocalTime end = KoreaTime.nowTime();
         if (inOut.getAttendance().getStatus() != AttendanceStatus.IN){
             throw new NotAttendanceTodayException("오늘 체크인한 이력이 없습니다. 체크인 부탁드립니다");
         }
         long inOutMinute= inOut.checkEnd(end);
 
-        Attendance entity = attendanceRepository.findByMemberIdAndDate(member.getId(), LocalDate.now())
+        Attendance entity = attendanceRepository.findByMemberIdAndDate(member.getId(), KoreaTime.today())
                 .orElse(null);
 
         if (entity == null) {
@@ -100,7 +102,7 @@ public class AttendanceService {
     @Transactional(readOnly = true)
     public List<DailyStayDto> getLast30Days(Long memberId) {
 
-        LocalDate end = LocalDate.now();
+        LocalDate end = KoreaTime.today();
         LocalDate start = end.minusDays(30);
 
         return attendanceRepository.findByMemberIdAndDateBetweenOrderByDateAsc(memberId, start, end)

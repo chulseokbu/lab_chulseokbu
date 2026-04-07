@@ -2,6 +2,7 @@ package com.example.LabAttendance.RollCall.Attendance;
 
 import com.example.LabAttendance.RollCall.InOut.InOut;
 import com.example.LabAttendance.RollCall.Member.Member;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -51,7 +52,7 @@ public class Attendance {
     private List<InOut> inOuts = new ArrayList<>();
 
     protected void onCreate() {
-        this.date = LocalDate.now();
+        this.date = KoreaTime.today();
         this.total = 0L;
         this.status = AttendanceStatus.IN;
     }

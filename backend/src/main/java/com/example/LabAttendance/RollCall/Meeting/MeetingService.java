@@ -11,6 +11,7 @@ import com.example.LabAttendance.RollCall.Meeting.Dto.*;
 import com.example.LabAttendance.RollCall.Member.Member;
 import com.example.LabAttendance.RollCall.Member.MemberRepository;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyInMeetingException;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -97,7 +98,7 @@ public class MeetingService {
         List<MeetingMember> meetingMembers = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
         List<Long> memberIds = meetingMembers.stream().map(mm -> mm.getMember().getId()).toList();
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = KoreaTime.today();
         Map<Long, Attendance> todayAttendanceByMemberId = new HashMap<>();
         for (Attendance a : attendanceRepository.findByMemberIdsAndDateBetweenWithInOuts(memberIds, today, today)) {
             todayAttendanceByMemberId.put(a.getMember().getId(), a);
@@ -149,7 +150,7 @@ public class MeetingService {
         List<MeetingMember> meetingMembers = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
         List<Long> memberIds = meetingMembers.stream().map(mm -> mm.getMember().getId()).toList();
 
-        LocalDate end = LocalDate.now();
+        LocalDate end = KoreaTime.today();
         LocalDate start = end.minusDays(6);
 
         // inout을 한 번에 가져오고, memberId별로 묶기
@@ -178,7 +179,7 @@ public class MeetingService {
         List<MeetingMember> meetingMembers = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
         List<Long> memberIds = meetingMembers.stream().map(mm -> mm.getMember().getId()).toList();
 
-        LocalDate end = LocalDate.now();
+        LocalDate end = KoreaTime.today();
         LocalDate start = end.minusDays(30);
 
         List<Attendance> attendances = attendanceRepository.findByMemberIdsAndDateBetween(memberIds, start, end);

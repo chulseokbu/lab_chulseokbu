@@ -1,6 +1,7 @@
 package com.example.LabAttendance.RollCall.Meeting;
 
 import com.example.LabAttendance.RollCall.Member.Member;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -40,7 +41,7 @@ public class MeetingMember {
     public MeetingMember(Meeting meeting, Member member) {
         this.meeting = meeting;
         this.member = member;
-        this.joinedAt = LocalDateTime.now();
+        this.joinedAt = KoreaTime.nowDateTime();
     }
 }
 

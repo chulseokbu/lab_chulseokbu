@@ -1,6 +1,7 @@
 package com.example.LabAttendance.RollCall.Meeting;
 
 import com.example.LabAttendance.RollCall.Member.Member;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,7 +48,7 @@ public class Meeting {
         this.code = code;
         this.name = name;
         this.createdBy = createdBy;
-        this.createdAt = LocalDate.now();
+        this.createdAt = KoreaTime.today();
     }
 
     /** 모임장(생성자) 변경 — 탈퇴·위임 시에만 사용 */
