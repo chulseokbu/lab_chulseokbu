@@ -23,6 +23,7 @@ class ApiConfig {
   static const String meetings = '/lab/meetings';
   static const String joinMeeting = '/lab/meetings/join';
   static String meetingById(int meetingId) => '/lab/meetings/$meetingId';
+  /// 탈퇴: POST …/leave (test 브랜치 backend 기준). 404면 Railway가 test의 최신 backend를 배포했는지 확인.
   static String meetingLeave(int meetingId) => '/lab/meetings/$meetingId/leave';
   static String meetingDelete(int meetingId) => '/lab/meetings/$meetingId';
   static String meetingDelegate(int meetingId) =>

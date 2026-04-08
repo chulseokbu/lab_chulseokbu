@@ -133,6 +133,7 @@ class LabStatusCardState extends State<LabStatusCard>
       if (alreadyCheckedIn) {
         _currentStatus = LabStatus.inLab;
         await _persistAttendanceState();
+        widget.onStatusUpdated?.call(_lastCheckInAt);
       }
       _showSnackBar(e.message);
     } catch (_) {

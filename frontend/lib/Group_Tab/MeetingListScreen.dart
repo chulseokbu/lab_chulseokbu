@@ -98,6 +98,35 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     return '';
   }
 
+  /// 모임 참여 등 디버깅용: 상태코드·본문·예외를 한 문자열로 묶는다.
+  String _formatJoinDiagnostic({
+    required int? statusCode,
+    required String serverMessage,
+    required String responseBody,
+    String? clientException,
+    String? requestUrl,
+  }) {
+    final b = StringBuffer();
+    if (clientException != null && clientException.isNotEmpty) {
+      b.writeln('=== 클라이언트 예외 ===');
+      b.writeln(clientException);
+      b.writeln();
+    }
+    if (requestUrl != null && requestUrl.isNotEmpty) {
+      b.writeln('요청: $requestUrl');
+    }
+    if (statusCode != null) {
+      b.writeln('HTTP 상태: $statusCode');
+    }
+    if (serverMessage.isNotEmpty) {
+      b.writeln('서버 message: $serverMessage');
+    }
+    b.writeln('--- 응답 본문 ---');
+    final body = responseBody.trim();
+    b.writeln(body.isEmpty ? '(비어 있음)' : body);
+    return b.toString().trim();
+  }
+
   Future<void> _showAlert(String message) async {
     if (!mounted) return;
     await showDialog<void>(
@@ -108,6 +137,72 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 참여 실패 시 상세 오류 + 클립보드 복사
+  Future<void> _showJoinErrorDetail({
+    required String summary,
+    required String detailText,
+  }) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('모임 참여 오류'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                summary,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      detailText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        fontFamily: 'monospace',
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final full =
+                  '$summary\n\n${detailText.trim()}'.trim();
+              await Clipboard.setData(ClipboardData(text: full));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('오류 내용을 복사했습니다.')),
+              );
+            },
+            child: const Text('복사'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('확인'),
           ),
         ],
@@ -151,10 +246,8 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
             title: const Text('모임 참여', style: TextStyle(fontWeight: FontWeight.bold)),
             content: TextField(
               controller: codeController,
-              textCapitalization: TextCapitalization.characters,
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-                UpperCaseTextFormatter(),
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]')),
               ],
               decoration: InputDecoration(
                 labelText: '모임 코드 입력',
@@ -171,22 +264,49 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               ),
               ElevatedButton(
                 onPressed: isJoining ? null : () async {
-                  final code = codeController.text.trim().toUpperCase();
+                  final code = codeController.text.trim();
                   if (code.isEmpty) return;
+                  final joinUrl = '${ApiConfig.baseUrl}${ApiConfig.joinMeeting}';
                   setDialogState(() => isJoining = true);
                   try {
                     final profileService = ProfileService();
                     final profile = await profileService.loadProfile();
                     final token = profile['accessToken'];
+                    if (token == null || token.toString().trim().isEmpty) {
+                      if (!mounted) return;
+                      Navigator.of(context, rootNavigator: true).pop();
+                      await _showJoinErrorDetail(
+                        summary: '로그인이 필요합니다.',
+                        detailText: _formatJoinDiagnostic(
+                          statusCode: null,
+                          serverMessage: '',
+                          responseBody: '',
+                          requestUrl: joinUrl,
+                          clientException:
+                              '저장된 accessToken이 없습니다. 로그인 후 다시 시도해 주세요.',
+                        ),
+                      );
+                      return;
+                    }
+
                     final response = await http.post(
-                      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.joinMeeting}'),
+                      Uri.parse(joinUrl),
                       headers: {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer $token'
                       },
-                      body: json.encode({'inviteCode': code}),
+                      // Railway 프로덕션: code 필드 필수. 로컬/기타: inviteCode 병행.
+                      body: json.encode({'code': code, 'inviteCode': code}),
                     );
+                    final rawBody = utf8.decode(response.bodyBytes);
                     final message = _extractServerMessage(response);
+                    final diagnostic = _formatJoinDiagnostic(
+                      statusCode: response.statusCode,
+                      serverMessage: message,
+                      responseBody: rawBody,
+                      requestUrl: joinUrl,
+                    );
+
                     if (response.statusCode == 200 || response.statusCode == 201) {
                       if (!mounted) return;
                       Navigator.of(context, rootNavigator: true).pop();
@@ -198,39 +318,55 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                       return;
                     }
 
+                    if (!mounted) return;
+                    Navigator.of(context, rootNavigator: true).pop();
+
                     final bool isAlreadyJoined = response.statusCode == 409 ||
                         (response.statusCode == 400 &&
                             message.contains('이미') &&
                             (message.contains('참여') ||
                                 message.contains('가입')));
                     if (isAlreadyJoined) {
-                      if (!mounted) return;
-                      Navigator.of(context, rootNavigator: true).pop();
-                      await _showAlert('이미 들어간 모임입니다.');
+                      await _showJoinErrorDetail(
+                        summary: '이미 이 모임에 참여 중입니다.',
+                        detailText: diagnostic,
+                      );
                       return;
                     }
 
                     final bool isInvalidMeeting =
                         response.statusCode == 404 ||
-                        message.contains('존재하지') ||
-                        message.contains('유효하지');
+                            message.contains('존재하지') ||
+                            message.contains('유효하지');
                     if (isInvalidMeeting) {
-                      if (!mounted) return;
-                      Navigator.of(context, rootNavigator: true).pop();
-                      await _showAlert('존재할 수 없는 모임입니다.');
+                      await _showJoinErrorDetail(
+                        summary:
+                            '모임을 찾을 수 없거나 초대 코드가 올바르지 않습니다.',
+                        detailText: diagnostic,
+                      );
                       return;
                     }
 
-                    if (!mounted) return;
-                    Navigator.of(context, rootNavigator: true).pop();
-                    await _showAlert(
-                      message.isNotEmpty ? message : '모임 참여 중 오류가 발생했습니다.',
+                    await _showJoinErrorDetail(
+                      summary: message.isNotEmpty
+                          ? message
+                          : '모임 참여 요청이 실패했습니다. (HTTP ${response.statusCode})',
+                      detailText: diagnostic,
                     );
-                  } catch (e) {
-                    debugPrint("Join Error: $e");
+                  } catch (e, st) {
+                    debugPrint("Join Error: $e\n$st");
                     if (!mounted) return;
                     Navigator.of(context, rootNavigator: true).pop();
-                    await _showAlert('네트워크 오류로 모임 참여에 실패했습니다.');
+                    await _showJoinErrorDetail(
+                      summary: '네트워크 또는 클라이언트 오류가 발생했습니다.',
+                      detailText: _formatJoinDiagnostic(
+                        statusCode: null,
+                        serverMessage: '',
+                        responseBody: '',
+                        requestUrl: joinUrl,
+                        clientException: '$e\n\n$st',
+                      ),
+                    );
                   } finally {
                     if (mounted) {
                       try {
@@ -312,20 +448,6 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class UpperCaseTextFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    return newValue.copyWith(
-      text: newValue.text.toUpperCase(),
-      selection: newValue.selection,
-      composing: TextRange.empty,
     );
   }
 }

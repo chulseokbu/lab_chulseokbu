@@ -69,6 +69,7 @@ class AuthService {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyAccessToken);
+    await prefs.remove('accessToken');
     await prefs.remove(_keyMemberId);
     await prefs.remove(_keyEmail);
     await prefs.remove(_keyUsername);
@@ -76,11 +77,17 @@ class AuthService {
   }
 
   /// 앱 시작 시 저장된 토큰 복원
+  /// [LoginScreen]은 ProfileService 키 `accessToken`에 저장하므로 둘 다 조회한다.
   Future<bool> restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_keyAccessToken);
-    if (token != null && token.isNotEmpty) {
-      _client.setToken(token);
+    var token = prefs.getString(_keyAccessToken);
+    token ??= prefs.getString('accessToken');
+    final trimmed = token?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      _client.setToken(trimmed);
+      if (prefs.getString(_keyAccessToken) == null) {
+        await prefs.setString(_keyAccessToken, trimmed);
+      }
       return true;
     }
     return false;

@@ -79,7 +79,17 @@ class _HomePageState extends State<HomePage> {
                   setState(() {
                     _currentCheckInTime = time;
                   });
-                  _attendanceKey.currentState?.fetchMonthlyAttendance();
+                  void refreshAttendance() {
+                    _attendanceKey.currentState?.fetchMonthlyAttendance();
+                  }
+
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    refreshAttendance();
+                    Future<void>.delayed(
+                      const Duration(milliseconds: 400),
+                      refreshAttendance,
+                    );
+                  });
                 },
               ),
               const SizedBox(height: 16),
