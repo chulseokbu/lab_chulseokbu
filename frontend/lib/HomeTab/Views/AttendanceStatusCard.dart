@@ -1,259 +1,226 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/core/theme/app_colors.dart';
+import 'package:frontend/core/stay_heatmap.dart';
+import 'package:frontend/services/lab_stay_service.dart';
+import 'package:frontend/models/lab_stay_models.dart';
 
-/// 출석 현황 카드 - 월별 출석 그리드, 출석 빈도 범례, 이번 달 요약
-class AttendanceStatusCard extends StatelessWidget {
+class AttendanceStatusCard extends StatefulWidget {
   const AttendanceStatusCard({super.key});
 
   @override
+  State<AttendanceStatusCard> createState() => AttendanceStatusCardState();
+}
+
+class AttendanceStatusCardState extends State<AttendanceStatusCard> {
+  Map<String, String> _stayDurationMap = {};
+  bool _isLoading = true;
+  final DateTime _now = DateTime.now();
+
+  // 계산된 통계 데이터
+  int _totalAttendanceDays = 0;
+  int _consecutiveDays = 0;
+  double _attendanceRate = 0.0;
+  Map<int, int> _weeklyTotalMinutes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    fetchMonthlyAttendance();
+  }
+
+  // 데이터 로드 및 통계 계산 함수
+  Future<void> fetchMonthlyAttendance() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      // 💡 LabStayService를 통해 실제 30일 데이터를 가져옴
+      final List<DailyStayRecord> records = await LabStayService.instance.getLast30Days();
+      final Map<String, String> tempMap = {};
+
+      for (var record in records) {
+        if (record.date != null) {
+          // 서버 날짜 형식을 'yyyy-MM-dd'로 통일
+          String dateKey = record.date!.split('T')[0].split(' ')[0];
+          tempMap[dateKey] = record.duration ?? "0분";
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _stayDurationMap = tempMap;
+          _calculateRealStatistics(); // 실제 수치 계산
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("데이터 로드 중 오류 발생: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // 실제 데이터를 기반으로 통계 수치 계산
+  void _calculateRealStatistics() {
+    int totalDaysInMonth = DateTime(_now.year, _now.month + 1, 0).day;
+    int attendedCount = 0;
+    int maxConsecutive = 0;
+    int currentConsecutive = 0;
+    Map<int, int> weeklyMins = {};
+
+    final firstDayOfMonth = DateTime(_now.year, _now.month, 1);
+    final int firstWeekday = firstDayOfMonth.weekday;
+
+    for (int day = 1; day <= totalDaysInMonth; day++) {
+      String dateKey = "${_now.year}-${_now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
+      String? duration = _stayDurationMap[dateKey];
+
+      final minutes = StayHeatmap.parseDurationToMinutes(duration);
+      final isAttended = minutes > 0;
+
+      if (isAttended) {
+        attendedCount++;
+        currentConsecutive++;
+        if (currentConsecutive > maxConsecutive) maxConsecutive = currentConsecutive;
+        int weekIdx = (day + firstWeekday - 2) ~/ 7;
+        weeklyMins[weekIdx] = (weeklyMins[weekIdx] ?? 0) + minutes;
+      } else {
+        currentConsecutive = 0;
+      }
+    }
+
+    _totalAttendanceDays = attendedCount;
+    _consecutiveDays = maxConsecutive;
+    _attendanceRate = (totalDaysInMonth > 0) ? (attendedCount / totalDaysInMonth) * 100 : 0;
+    _weeklyTotalMinutes = weeklyMins;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _buildMainCard(),
+        const SizedBox(height: 12),
+        _buildStatisticsCards(),
+      ],
+    );
+  }
+
+  Widget _buildMainCard() {
     return Card(
-      color: const Color(0xFFFFFFFF),
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      color: Colors.white,
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 헤더: 출석 현황 + 출석 빈도 범례
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '출석 현황',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '출석 빈도',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildLegendBlock(0.2),
-                    _buildLegendBlock(0.4),
-                    _buildLegendBlock(0.6),
-                    _buildLegendBlock(0.8),
-                    _buildLegendBlock(1.0),
-                  ],
-                ),
+                Text('${_now.month}월 출석 현황', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                _buildLegend(),
               ],
             ),
-            const SizedBox(height: 16),
-
-            // 월별 출석 그리드
-            _buildMonthlyGrid(),
-            const SizedBox(height: 16),
-
-            // 이번 달 출석 현황 요약
-            const Text(
-              '이번 달 출석 현황',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildSummaryRow(),
+            const SizedBox(height: 20),
+            _buildCalendarGrid(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLegendBlock(double intensity) {
-    return Container(
-      width: 14,
-      height: 14,
-      margin: const EdgeInsets.only(right: 2),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(intensity),
-        borderRadius: BorderRadius.circular(3),
-      ),
-    );
-  }
-
-  Widget _buildMonthlyGrid() {
-    // 더미 데이터: 5주차 x 7일, 출석 빈도 0~1
-    final attendanceData = _generateDummyAttendance();
-    final weekLabels = ['1주차', '2주차', '3주차', '4주차', '5주차'];
-    final dayLabels = ['월', '화', '수', '목', '금', '토', '일'];
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          // 9월 + 요일 헤더
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '9월',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    ...weekLabels.map((label) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        )),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  children: [
-                    // 요일 헤더
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: dayLabels
-                          .map((d) => SizedBox(
-                                width: 20,
-                                child: Text(
-                                  d,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 4),
-                    // 주차별 출석 블록
-                    ...List.generate(5, (weekIndex) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: List.generate(7, (dayIndex) {
-                            final intensity = attendanceData[weekIndex][dayIndex];
-                            return Container(
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: intensity > 0
-                                    ? AppColors.primary.withOpacity(0.2 + intensity * 0.8)
-                                    : Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            );
-                          }),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-              // 주차별 총 시간
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(5, (i) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      '··· ${72 + i * 8}시간',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<List<double>> _generateDummyAttendance() {
-    // 5주 x 7일, 0~1 사이 값 (출석 빈도)
-    return List.generate(5, (week) {
-      return List.generate(7, (day) {
-        if (week == 4 && day > 2) return 0.0; // 5주차는 일부만
-        return (week * 7 + day) % 10 / 10.0; // 다양한 빈도
-      });
-    });
-  }
-
-  Widget _buildSummaryRow() {
+  Widget _buildLegend() {
     return Row(
       children: [
-        Expanded(
-          child: _buildSummaryBox('18일', '총 출석일'),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSummaryBox('5일', '연속 출석'),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSummaryBox('78%', '출석률', highlight: true),
-        ),
+        const Text('빈도 ', style: TextStyle(fontSize: 10, color: Colors.grey)),
+        ...StayHeatmap.legendColors.map(_legendBox),
       ],
     );
   }
 
-  Widget _buildSummaryBox(String value, String label, {bool highlight = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300, width: 1),
-      ),
-      child: Column(
+  Widget _legendBox(Color color) => Container(width: 8, height: 8, margin: const EdgeInsets.only(left: 2), color: color);
+
+  Widget _buildCalendarGrid() {
+    final List<String> weekDays = ['월', '화', '수', '목', '금', '토', '일'];
+    final firstDayOfMonth = DateTime(_now.year, _now.month, 1);
+    final int firstWeekday = firstDayOfMonth.weekday;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            const SizedBox(width: 45),
+            ...weekDays.map((d) => Expanded(child: Center(child: Text(d, style: const TextStyle(fontSize: 11, color: Colors.grey))))),
+            const SizedBox(width: 40),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...List.generate(5, (weekIdx) => _buildWeekRow(weekIdx, firstWeekday)),
+      ],
+    );
+  }
+
+  Widget _buildWeekRow(int weekIdx, int firstWeekday) {
+    int weekMins = _weeklyTotalMinutes[weekIdx] ?? 0;
+    String weekTimeStr = weekMins > 0
+        ? (weekMins >= 60 ? "${(weekMins / 60).toStringAsFixed(1)}h" : "${weekMins}m")
+        : "";
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: highlight ? AppColors.primary : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
+          SizedBox(width: 45, child: Text('${weekIdx + 1}주차', style: const TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w500))),
+          ...List.generate(7, (dayIdx) {
+            int dayNumber = (weekIdx * 7) + (dayIdx + 1) - (firstWeekday - 1);
+            int totalDaysInMonth = DateTime(_now.year, _now.month + 1, 0).day;
+            bool isDateInMonth = dayNumber > 0 && dayNumber <= totalDaysInMonth;
+            String dateKey = "${_now.year}-${_now.month.toString().padLeft(2, '0')}-${dayNumber.toString().padLeft(2, '0')}";
+
+            return Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.2,
+                child: Container(
+                  margin: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(
+                    color: isDateInMonth
+                        ? StayHeatmap.colorForDurationString(_stayDurationMap[dateKey])
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            );
+          }),
+          SizedBox(width: 40, child: Text(weekTimeStr, textAlign: TextAlign.right, style: const TextStyle(fontSize: 10, color: Colors.grey))),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatisticsCards() {
+    return Row(
+      children: [
+        _statBox('$_totalAttendanceDays일', '총 출석일'),
+        const SizedBox(width: 8),
+        _statBox('$_consecutiveDays일', '연속 출석'),
+        const SizedBox(width: 8),
+        _statBox('${_attendanceRate.toStringAsFixed(0)}%', '출석률', isHighlight: true),
+      ],
+    );
+  }
+
+  Widget _statBox(String value, String label, {bool isHighlight = false}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          children: [
+            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isHighlight ? Colors.orange : Colors.black)),
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          ],
+        ),
       ),
     );
   }

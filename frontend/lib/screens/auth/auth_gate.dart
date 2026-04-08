@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/HomeTab/AuthTab/AuthScreen.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/screens/home/home_page.dart';
 import 'package:frontend/services/auth_service.dart';
 
@@ -23,12 +24,18 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _restoreSession() async {
-    final restored = await AuthService.instance.restoreSession();
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _isLoggedIn = restored;
-      });
+    var restored = false;
+    try {
+      restored = await AuthService.instance.restoreSession();
+    } catch (e, st) {
+      debugPrint('AuthGate._restoreSession: $e\n$st');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoggedIn = restored;
+        });
+      }
     }
   }
 
@@ -36,7 +43,10 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: AppColors.authBackground,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
       );
     }
     if (_isLoggedIn) {

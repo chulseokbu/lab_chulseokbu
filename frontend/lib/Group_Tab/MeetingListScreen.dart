@@ -1,13 +1,15 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 클립보드 복사 기능을 위해 필요
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:frontend/api/api_config.dart';
 import 'package:frontend/core/theme/app_colors.dart';
-import 'package:frontend/Group_Tab/widgets/create_meeting_dialog.dart';
 import 'package:frontend/Group_Tab/widgets/meeting_action_card.dart';
 import 'package:frontend/Group_Tab/widgets/meeting_card.dart';
 import 'package:frontend/HomeTab/Views/daily_status_view.dart';
-import 'package:frontend/models/meeting.dart';
+import 'package:frontend/HomeTab/Views/Profile_Service.dart';
+import 'package:frontend/models/meeting.dart' show Meeting, meetingRoleFromApi;
 
-/// 모임 리스트 메인 화면 (모임 탭 클릭 시 첫 화면)
 class MeetingListScreen extends StatefulWidget {
   const MeetingListScreen({super.key});
 
@@ -16,113 +18,386 @@ class MeetingListScreen extends StatefulWidget {
 }
 
 class _MeetingListScreenState extends State<MeetingListScreen> {
-  // 더미 데이터 (이미지와 동일)
-  late List<Meeting> _meetings;
+  List<Meeting> _meetings = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _meetings = [
-      Meeting(
-        code: 'ABC123',
-        name: 'AI 연구실',
-        memberCount: 10,
-        createdAt: '2024-01-15',
-      ),
-      Meeting(
-        code: 'XYZ789',
-        name: '데이터과학 스터디',
-        memberCount: 8,
-        createdAt: '2024-02-01',
-      ),
-    ];
+    _fetchMyMeetings();
   }
 
-  /// 6자리 랜덤 모임 코드 생성
-  String _generateMeetingCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final rnd = Random();
-    return String.fromCharCodes(
-      Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
+  Future<void> _fetchMyMeetings() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final profileService = ProfileService();
+      final profile = await profileService.loadProfile();
+      final token = profile['accessToken'];
+
+      if (token == null || token.isEmpty) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetings}'),
+        headers: {
+          'Accept': '*/*',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final decodedData = json.decode(utf8.decode(response.bodyBytes));
+        final dynamic rawList = decodedData is List ? decodedData : decodedData['data'];
+        final List<dynamic> fetchedData = rawList ?? [];
+
+        if (mounted) {
+          setState(() {
+            _meetings = fetchedData.map((m) {
+              final map = m is Map<String, dynamic>
+                  ? m
+                  : <String, dynamic>{};
+              return Meeting(
+                meetingId: _parseMeetingId(map),
+                code: (map['inviteCode'] ?? map['code'] ?? '').toString(),
+                name: map['name']?.toString() ?? '이름 없음',
+                memberCount: map['memberCount'] as int? ?? 0,
+                createdAt: map['createdAt']?.toString() ?? '',
+                myRole: meetingRoleFromApi(map['myRole']),
+              );
+            }).toList();
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("❌ 에러 발생: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  int? _parseMeetingId(dynamic item) {
+    if (item is! Map<String, dynamic>) return null;
+    final dynamic rawId = item['meetingId'] ?? item['id'] ?? item['meeting_id'];
+    if (rawId is int) return rawId;
+    return int.tryParse(rawId?.toString() ?? '');
+  }
+
+  String _extractServerMessage(http.Response response) {
+    try {
+      final dynamic decoded = json.decode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic>) {
+        return (decoded['message'] ?? '').toString().trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// 모임 참여 등 디버깅용: 상태코드·본문·예외를 한 문자열로 묶는다.
+  String _formatJoinDiagnostic({
+    required int? statusCode,
+    required String serverMessage,
+    required String responseBody,
+    String? clientException,
+    String? requestUrl,
+  }) {
+    final b = StringBuffer();
+    if (clientException != null && clientException.isNotEmpty) {
+      b.writeln('=== 클라이언트 예외 ===');
+      b.writeln(clientException);
+      b.writeln();
+    }
+    if (requestUrl != null && requestUrl.isNotEmpty) {
+      b.writeln('요청: $requestUrl');
+    }
+    if (statusCode != null) {
+      b.writeln('HTTP 상태: $statusCode');
+    }
+    if (serverMessage.isNotEmpty) {
+      b.writeln('서버 message: $serverMessage');
+    }
+    b.writeln('--- 응답 본문 ---');
+    final body = responseBody.trim();
+    b.writeln(body.isEmpty ? '(비어 있음)' : body);
+    return b.toString().trim();
+  }
+
+  Future<void> _showAlert(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('안내'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 참여 실패 시 상세 오류 + 클립보드 복사
+  Future<void> _showJoinErrorDetail({
+    required String summary,
+    required String detailText,
+  }) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('모임 참여 오류'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                summary,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      detailText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        fontFamily: 'monospace',
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final full =
+                  '$summary\n\n${detailText.trim()}'.trim();
+              await Clipboard.setData(ClipboardData(text: full));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('오류 내용을 복사했습니다.')),
+              );
+            },
+            child: const Text('복사'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
     );
   }
 
   void _showCreateMeetingDialog() {
-    final generatedCode = _generateMeetingCode();
-
-    showDialog(
+    showGeneralDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => CreateMeetingDialog(
-        initialName: 'AI 연구실',
-        meetingCode: generatedCode,
-        onCancel: () => Navigator.pop(context),
-        onCreate: (name) {
-          setState(() {
-            _meetings.insert(
-              0,
-              Meeting(
-                code: generatedCode,
-                name: name,
-                memberCount: 1,
-                createdAt: DateTime.now().toString().substring(0, 10),
-              ),
-            );
-          });
-          Navigator.pop(context);
+      barrierDismissible: true,
+      barrierLabel: '',
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) => _InternalCreateMeetingDialog(
+        onCreate: (String name, String code) {
+          _fetchMyMeetings();
         },
       ),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return Transform.scale(
+          scale: anim1.value,
+          child: Opacity(
+            opacity: anim1.value,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
   void _showJoinMeetingDialog() {
     final codeController = TextEditingController();
+    bool isJoining = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('모임 참여'),
-        content: TextField(
-          controller: codeController,
-          decoration: const InputDecoration(
-            labelText: '모임 코드 입력',
-            hintText: '초대 코드를 입력하세요',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final code = codeController.text.trim();
-              Navigator.pop(context);
-              if (code.isNotEmpty) {
-                final existing = _meetings.where((m) => m.code == code).firstOrNull;
-                if (existing != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('이미 참여 중인 모임입니다.')),
-                  );
-                } else {
-                  setState(() {
-                    _meetings.add(Meeting(
-                      code: code,
-                      name: '새 모임 ($code)',
-                      memberCount: 1,
-                      createdAt: DateTime.now().toString().substring(0, 10),
-                    ));
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('모임에 참여했습니다.')),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: const Text('참여'),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('모임 참여', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: TextField(
+              controller: codeController,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]')),
+              ],
+              decoration: InputDecoration(
+                labelText: '모임 코드 입력',
+                hintText: '초대 코드를 입력하세요',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              enabled: !isJoining,
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    isJoining ? null : () => Navigator.of(dialogContext).pop(),
+                child: const Text('취소', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: isJoining ? null : () async {
+                  final code = codeController.text.trim();
+                  if (code.isEmpty) return;
+                  final joinUrl = '${ApiConfig.baseUrl}${ApiConfig.joinMeeting}';
+                  setDialogState(() => isJoining = true);
+                  try {
+                    final profileService = ProfileService();
+                    final profile = await profileService.loadProfile();
+                    final token = profile['accessToken'];
+                    if (token == null || token.toString().trim().isEmpty) {
+                      if (!mounted) return;
+                      Navigator.of(context, rootNavigator: true).pop();
+                      await _showJoinErrorDetail(
+                        summary: '로그인이 필요합니다.',
+                        detailText: _formatJoinDiagnostic(
+                          statusCode: null,
+                          serverMessage: '',
+                          responseBody: '',
+                          requestUrl: joinUrl,
+                          clientException:
+                              '저장된 accessToken이 없습니다. 로그인 후 다시 시도해 주세요.',
+                        ),
+                      );
+                      return;
+                    }
+
+                    final response = await http.post(
+                      Uri.parse(joinUrl),
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer $token'
+                      },
+                      // Railway 프로덕션: code 필드 필수. 로컬/기타: inviteCode 병행.
+                      body: json.encode({'code': code, 'inviteCode': code}),
+                    );
+                    final rawBody = utf8.decode(response.bodyBytes);
+                    final message = _extractServerMessage(response);
+                    final diagnostic = _formatJoinDiagnostic(
+                      statusCode: response.statusCode,
+                      serverMessage: message,
+                      responseBody: rawBody,
+                      requestUrl: joinUrl,
+                    );
+
+                    if (response.statusCode == 200 || response.statusCode == 201) {
+                      if (!mounted) return;
+                      Navigator.of(context, rootNavigator: true).pop();
+                      await _fetchMyMeetings();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('모임 참여가 완료되었습니다.')),
+                      );
+                      return;
+                    }
+
+                    if (!mounted) return;
+                    Navigator.of(context, rootNavigator: true).pop();
+
+                    final bool isAlreadyJoined = response.statusCode == 409 ||
+                        (response.statusCode == 400 &&
+                            message.contains('이미') &&
+                            (message.contains('참여') ||
+                                message.contains('가입')));
+                    if (isAlreadyJoined) {
+                      await _showJoinErrorDetail(
+                        summary: '이미 이 모임에 참여 중입니다.',
+                        detailText: diagnostic,
+                      );
+                      return;
+                    }
+
+                    final bool isInvalidMeeting =
+                        response.statusCode == 404 ||
+                            message.contains('존재하지') ||
+                            message.contains('유효하지');
+                    if (isInvalidMeeting) {
+                      await _showJoinErrorDetail(
+                        summary:
+                            '모임을 찾을 수 없거나 초대 코드가 올바르지 않습니다.',
+                        detailText: diagnostic,
+                      );
+                      return;
+                    }
+
+                    await _showJoinErrorDetail(
+                      summary: message.isNotEmpty
+                          ? message
+                          : '모임 참여 요청이 실패했습니다. (HTTP ${response.statusCode})',
+                      detailText: diagnostic,
+                    );
+                  } catch (e, st) {
+                    debugPrint("Join Error: $e\n$st");
+                    if (!mounted) return;
+                    Navigator.of(context, rootNavigator: true).pop();
+                    await _showJoinErrorDetail(
+                      summary: '네트워크 또는 클라이언트 오류가 발생했습니다.',
+                      detailText: _formatJoinDiagnostic(
+                        statusCode: null,
+                        serverMessage: '',
+                        responseBody: '',
+                        requestUrl: joinUrl,
+                        clientException: '$e\n\n$st',
+                      ),
+                    );
+                  } finally {
+                    if (mounted) {
+                      try {
+                        setDialogState(() => isJoining = false);
+                      } catch (_) {}
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: isJoining
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('참여하기', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  void _goMeetingDetail(Meeting meeting) {
+    if (meeting.meetingId == null) {
+      _showAlert('해당 모임 정보를 불러올 수 없습니다. 목록을 새로고침해 주세요.');
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => DailyStatusView(meeting: meeting)),
     );
   }
 
@@ -131,72 +406,211 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 제목
-              const Text(
-                '내 모임',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: _fetchMyMeetings,
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('내 모임', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(child: MeetingActionCard(icon: Icons.login_rounded, label: '모임 참여', isPrimary: false, onTap: _showJoinMeetingDialog)),
+                    const SizedBox(width: 16),
+                    Expanded(child: MeetingActionCard(icon: Icons.group_add_rounded, label: '모임 생성', isPrimary: true, onTap: _showCreateMeetingDialog)),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '참여 중인 모임을 관리하세요',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // 모임 참여 / 모임 생성 카드
-              Row(
-                children: [
-                  Expanded(
-                    child: MeetingActionCard(
-                      icon: Icons.arrow_forward_ios,
-                      label: '모임 참여',
-                      isPrimary: false,
-                      onTap: _showJoinMeetingDialog,
+                const SizedBox(height: 32),
+                if (_meetings.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 80),
+                      child: Text('가입된 모임이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 16)),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: MeetingActionCard(
-                      icon: Icons.add,
-                      label: '모임 생성',
-                      isPrimary: true,
-                      onTap: _showCreateMeetingDialog,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // 모임 리스트
-              ..._meetings.map((meeting) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
+                  )
+                else
+                  ..._meetings.map((meeting) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
                     child: MeetingCard(
                       meeting: meeting,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DailyStatusView(),
-                          ),
-                        );
-                      },
+                      onTap: () => _goMeetingDetail(meeting),
                     ),
                   )),
-              const SizedBox(height: 100),
-            ],
+                const SizedBox(height: 100),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InternalCreateMeetingDialog extends StatefulWidget {
+  final Function(String name, String code) onCreate;
+  const _InternalCreateMeetingDialog({required this.onCreate});
+
+  @override
+  State<_InternalCreateMeetingDialog> createState() => _InternalCreateMeetingDialogState();
+}
+
+class _InternalCreateMeetingDialogState extends State<_InternalCreateMeetingDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  String? _serverCode;
+  bool _isLoading = false;
+
+  Future<void> _handleGenerateCode() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _isLoading = true);
+    try {
+      final profileService = ProfileService();
+      final profile = await profileService.loadProfile();
+      final token = profile['accessToken'];
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetings}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({"name": name}),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data =
+            json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final inner = data['data'];
+        if (inner is Map<String, dynamic>) {
+          final code = (inner['inviteCode'] ?? inner['code'])?.toString();
+          if (code != null && code.isNotEmpty) {
+            setState(() => _serverCode = code);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ 생성 에러: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, spreadRadius: 5),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('새로운 모임 만들기', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              decoration: InputDecoration(
+                labelText: '모임 이름',
+                hintText: '멋진 모임 이름을 지어주세요',
+                floatingLabelStyle: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                prefixIcon: const Icon(Icons.edit_note_rounded, color: AppColors.primary),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+              ),
+              enabled: _serverCode == null && !_isLoading,
+            ),
+            const SizedBox(height: 20),
+            if (_serverCode != null) ...[
+              const Divider(height: 40),
+              const Text('초대 코드가 생성되었습니다', style: TextStyle(fontSize: 14, color: Colors.blueGrey, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: _serverCode!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('코드가 복사되었습니다: $_serverCode'),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: Colors.black87,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      margin: const EdgeInsets.all(20),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1.5, style: BorderStyle.solid),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(_serverCode!, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: 8)),
+                      const SizedBox(height: 8),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.copy_rounded, size: 16, color: AppColors.primary),
+                          SizedBox(width: 6),
+                          Text('터치하여 복사하기', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: Colors.grey.shade600),
+                    child: const Text('닫기', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : (_serverCode == null ? _handleGenerateCode : () {
+                      widget.onCreate(_nameController.text.trim(), _serverCode!);
+                      Navigator.pop(context);
+                    }),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Text(_serverCode == null ? '코드 생성' : '시작하기', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
