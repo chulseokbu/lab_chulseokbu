@@ -1,0 +1,301 @@
+package com.example.LabAttendance.RollCall.Meeting;
+
+import com.example.LabAttendance.RollCall.Attendance.Attendance;
+import com.example.LabAttendance.RollCall.Attendance.AttendanceStatus;
+import com.example.LabAttendance.RollCall.Attendance.AttendanceRepository;
+import com.example.LabAttendance.RollCall.Attendance.Dto.DailyStayDto;
+import com.example.LabAttendance.RollCall.InOut.InOut;
+import com.example.LabAttendance.RollCall.InOut.InOutRepository;
+import com.example.LabAttendance.RollCall.InOut.Dto.InoutDto;
+import com.example.LabAttendance.RollCall.Meeting.Dto.*;
+import com.example.LabAttendance.RollCall.Member.Member;
+import com.example.LabAttendance.RollCall.Member.MemberRepository;
+import com.example.LabAttendance.RollCall.global.Exception.AlreadyInMeetingException;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class MeetingService {
+
+    private final MeetingRepository meetingRepository;
+    private final MeetingMemberRepository meetingMemberRepository;
+    private final MeetingCodeGenerator codeGenerator;
+    private final MemberRepository memberRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final InOutRepository inOutRepository;
+
+    public MeetingResponseDto createMeeting(Long memberId, MeetingCreateRequestDto req) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new EntityNotFoundException("로그인 먼저 진행해 주세요"));
+
+        Meeting saved = null;
+        for (int i = 0; i < 30; i++) {
+            String code = codeGenerator.generate();
+            try {
+                saved = meetingRepository.save(new Meeting(code, req.name(), member));
+                break;
+            } catch (DataIntegrityViolationException e) {
+                // code 유니크 충돌 시 재시도
+            }
+        }
+        if (saved == null) {
+            throw new IllegalStateException("모임 코드 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        }
+
+        meetingMemberRepository.save(new MeetingMember(saved, member));
+        int memberCount = 1;
+
+        return MeetingResponseDto.from(saved, memberCount);
+    }
+
+    public MeetingResponseDto joinMeeting(Long memberId, MeetingJoinRequestDto req) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new EntityNotFoundException("로그인 먼저 진행해 주세요"));
+
+        String code = req.code() != null ? req.code().trim().toUpperCase() : "";
+        Meeting meeting = meetingRepository.findByCode(code)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+
+        if (meetingMemberRepository.existsByMeeting_IdAndMember_Id(meeting.getId(), member.getId())) {
+            throw new AlreadyInMeetingException("이미 참여 중인 모임입니다.");
+        }
+
+        meetingMemberRepository.save(new MeetingMember(meeting, member));
+
+        int memberCount = meetingMemberRepository.findAllByMeetingIdWithMember(meeting.getId()).size();
+        return MeetingResponseDto.from(meeting, memberCount);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MeetingResponseDto> listMyMeetings(Long memberId) {
+        List<MeetingMember> memberships = meetingMemberRepository.findAllByMemberIdWithMeeting(memberId);
+        List<MeetingResponseDto> result = new ArrayList<>();
+        for (MeetingMember mm : memberships) {
+            Meeting m = mm.getMeeting();
+            int count = meetingMemberRepository.findAllByMeetingIdWithMember(m.getId()).size();
+            result.add(MeetingResponseDto.from(m, count));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<MeetingMemberRetentionDto> getRetention(Long requesterMemberId, Long meetingId) {
+        assertMemberInMeeting(requesterMemberId, meetingId);
+
+        List<MeetingMember> meetingMembers = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        List<Long> memberIds = meetingMembers.stream().map(mm -> mm.getMember().getId()).toList();
+
+        LocalDate today = KoreaTime.today();
+        Map<Long, Attendance> todayAttendanceByMemberId = new HashMap<>();
+        for (Attendance a : attendanceRepository.findByMemberIdsAndDateBetweenWithInOuts(memberIds, today, today)) {
+            todayAttendanceByMemberId.put(a.getMember().getId(), a);
+        }
+
+        List<MeetingMemberRetentionDto> result = new ArrayList<>();
+        for (MeetingMember mm : meetingMembers) {
+            Member mem = mm.getMember();
+            Attendance todayAttendance = todayAttendanceByMemberId.get(mem.getId());
+
+            // "잔류 중"은 오늘 출석이 있고, 아직 체크아웃(endTime)이 없는 inout이 존재하는 경우로 정의합니다.
+            boolean isPresent = todayAttendance != null && hasOpenInOut(todayAttendance);
+            String checkIn = null;
+            String lastExit = null;
+            // 잔류 시간(duration)은 프론트에서 (now - checkIn)으로 실시간 계산하도록 null로 둡니다.
+            String duration = null;
+
+            if (isPresent) {
+                checkIn = latestOpenCheckInIso(todayAttendance);
+            } else {
+                Optional<InOut> last = inOutRepository
+                        .findTopByAttendance_Member_IdAndEndTimeIsNotNullOrderByAttendance_DateDescEndTimeDesc(mem.getId());
+                if (last.isPresent() && last.get().getAttendance() != null) {
+                    var att = last.get().getAttendance();
+                    lastExit = KoreaTime.formatOffsetDateTime(att.getDate(), last.get().getEndTime());
+                }
+            }
+
+            result.add(new MeetingMemberRetentionDto(
+                    mem.getId(),
+                    mem.getNickname(),
+                    mem.getNickname() != null && !mem.getNickname().isBlank() ? mem.getNickname().substring(0, 1) : "",
+                    isPresent,
+                    checkIn,
+                    lastExit,
+                    duration
+            ));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<MemberWeekStayDto> getWeekStay(Long requesterMemberId, Long meetingId) {
+        assertMemberInMeeting(requesterMemberId, meetingId);
+        List<MeetingMember> meetingMembers = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        List<Long> memberIds = meetingMembers.stream().map(mm -> mm.getMember().getId()).toList();
+
+        LocalDate end = KoreaTime.today();
+        LocalDate start = end.minusDays(6);
+
+        // inout을 한 번에 가져오고, memberId별로 묶기
+        List<InOut> inOuts = inOutRepository.findInOutsForMembersBetween(memberIds, start, end);
+        Map<Long, List<InoutDto>> byMember = new HashMap<>();
+        for (InOut io : inOuts) {
+            Long mid = io.getAttendance().getMember().getId();
+            byMember.computeIfAbsent(mid, k -> new ArrayList<>()).add(InoutDto.from(io));
+        }
+
+        List<MemberWeekStayDto> result = new ArrayList<>();
+        for (MeetingMember mm : meetingMembers) {
+            Member m = mm.getMember();
+            result.add(new MemberWeekStayDto(
+                    m.getId(),
+                    m.getNickname(),
+                    byMember.getOrDefault(m.getId(), List.of())
+            ));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<MemberMonthStayDto> getMonthStay(Long requesterMemberId, Long meetingId) {
+        assertMemberInMeeting(requesterMemberId, meetingId);
+        List<MeetingMember> meetingMembers = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        List<Long> memberIds = meetingMembers.stream().map(mm -> mm.getMember().getId()).toList();
+
+        LocalDate end = KoreaTime.today();
+        LocalDate start = end.minusDays(30);
+
+        List<Attendance> attendances = attendanceRepository.findByMemberIdsAndDateBetween(memberIds, start, end);
+        Map<Long, List<DailyStayDto>> byMember = new HashMap<>();
+        for (Attendance a : attendances) {
+            Long mid = a.getMember().getId();
+            byMember.computeIfAbsent(mid, k -> new ArrayList<>()).add(DailyStayDto.from(a));
+        }
+
+        List<MemberMonthStayDto> result = new ArrayList<>();
+        for (MeetingMember mm : meetingMembers) {
+            Member m = mm.getMember();
+            result.add(new MemberMonthStayDto(
+                    m.getId(),
+                    m.getNickname(),
+                    byMember.getOrDefault(m.getId(), List.of())
+            ));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public MeetingDetailResponseDto getMeetingDetail(Long requesterMemberId, Long meetingId) {
+        assertMemberInMeeting(requesterMemberId, meetingId);
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        boolean isLeader = meeting.getCreatedBy() != null
+                && meeting.getCreatedBy().getId().equals(requesterMemberId);
+
+        List<MeetingMember> rows = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        List<MeetingMemberItemDto> members = rows.stream().map(mm -> {
+            Member m = mm.getMember();
+            boolean leader = meeting.getCreatedBy() != null
+                    && meeting.getCreatedBy().getId().equals(m.getId());
+            return new MeetingMemberItemDto(m.getId(), m.getNickname(), leader ? "LEADER" : "MEMBER");
+        }).toList();
+
+        String code = meeting.getCode();
+        return new MeetingDetailResponseDto(
+                meeting.getId(),
+                meeting.getName(),
+                code,
+                isLeader ? code : null,
+                isLeader ? "LEADER" : "MEMBER",
+                members
+        );
+    }
+
+    public void leaveMeeting(Long memberId, Long meetingId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        MeetingMember mine = meetingMemberRepository.findByMeeting_IdAndMember_Id(meetingId, memberId)
+                .orElseThrow(() -> new IllegalArgumentException("이 모임의 구성원이 아닙니다."));
+
+        Member createdBy = meeting.getCreatedBy();
+        boolean isCreator = createdBy != null && createdBy.getId().equals(memberId);
+
+        meetingMemberRepository.delete(mine);
+        meetingMemberRepository.flush();
+
+        List<MeetingMember> remaining = meetingMemberRepository.findAllByMeetingIdWithMember(meetingId);
+        if (remaining.isEmpty()) {
+            meetingRepository.delete(meeting);
+            return;
+        }
+
+        if (isCreator) {
+            MeetingMember successor = remaining.stream()
+                    .min(Comparator.comparing(MeetingMember::getJoinedAt))
+                    .orElseThrow();
+            meeting.setCreatedBy(successor.getMember());
+            meetingRepository.save(meeting);
+        }
+    }
+
+    public void deleteMeeting(Long memberId, Long meetingId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        Member creator = meeting.getCreatedBy();
+        if (creator == null || !creator.getId().equals(memberId)) {
+            throw new IllegalArgumentException("모임을 삭제할 권한이 없습니다.");
+        }
+        meetingRepository.delete(meeting);
+    }
+
+    public void delegateLeadership(Long currentMemberId, Long meetingId, Long newLeaderMemberId) {
+        if (currentMemberId.equals(newLeaderMemberId)) {
+            throw new IllegalArgumentException("자기 자신에게 위임할 수 없습니다.");
+        }
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new EntityNotFoundException("모임을 찾을 수 없습니다."));
+        Member creator = meeting.getCreatedBy();
+        if (creator == null || !creator.getId().equals(currentMemberId)) {
+            throw new IllegalArgumentException("모임장만 위임할 수 있습니다.");
+        }
+        if (!meetingMemberRepository.existsByMeeting_IdAndMember_Id(meetingId, newLeaderMemberId)) {
+            throw new IllegalArgumentException("선택한 회원은 이 모임에 참여 중이 아닙니다.");
+        }
+        Member newLeader = memberRepository.findById(newLeaderMemberId)
+                .orElseThrow(() -> new EntityNotFoundException("회원을 찾을 수 없습니다."));
+        meeting.setCreatedBy(newLeader);
+        meetingRepository.save(meeting);
+    }
+
+    private void assertMemberInMeeting(Long memberId, Long meetingId) {
+        if (!meetingMemberRepository.existsByMeeting_IdAndMember_Id(meetingId, memberId)) {
+            throw new EntityNotFoundException("모임에 참여 중인 사용자만 조회할 수 있습니다.");
+        }
+    }
+
+    private boolean hasOpenInOut(Attendance todayAttendance) {
+        if (todayAttendance.getInOuts() == null) return false;
+        return todayAttendance.getInOuts().stream().anyMatch(io -> io.getEndTime() == null);
+    }
+
+    private String latestOpenCheckInIso(Attendance todayAttendance) {
+        if (todayAttendance.getInOuts() == null || todayAttendance.getInOuts().isEmpty()) return null;
+        return todayAttendance.getInOuts().stream()
+                .filter(io -> io.getEndTime() == null)
+                .map(io -> KoreaTime.formatOffsetDateTime(todayAttendance.getDate(), io.getStartTime()))
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+    }
+}
+

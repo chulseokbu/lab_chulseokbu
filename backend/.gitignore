@@ -10,6 +10,9 @@
 .gradle/
 build/
 
+# Local DB (H2 file)
+data/
+
 # OS
 .DS_Store
 

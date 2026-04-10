@@ -1,5 +1,7 @@
 package com.example.LabAttendance.RollCall.Member;
 
+import com.example.LabAttendance.RollCall.Meeting.MeetingMemberRepository;
+import com.example.LabAttendance.RollCall.Meeting.MeetingRepository;
 import com.example.LabAttendance.RollCall.Member.DTO.*;
 import com.example.LabAttendance.RollCall.global.Exception.DuplicateEmailException;
 import com.example.LabAttendance.RollCall.global.Exception.MemberNotFoundException;
@@ -10,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+
 @RequiredArgsConstructor
 @Service
 @Transactional
@@ -18,6 +22,8 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final MeetingMemberRepository meetingMemberRepository;
+    private final MeetingRepository meetingRepository;
 
     public MemberResponseDto create(MemberSignupRequestDto requestDto) {
 
@@ -29,14 +35,14 @@ public class MemberService {
 
 
         Member member = new Member(
-                null, // id (DB에서 자동 생성되므로 null 전달)
+                null,
                 requestDto.memberId(),
                 requestDto.nickname(),
                 hashedPassword,
                 requestDto.email(),
                 requestDto.phone(),
                 requestDto.gender(),
-                null // attandenceList (생성 시에는 null 또는 new ArrayList() 전달)
+                new ArrayList<>()
         );
 
         memberRepository.save(member);
@@ -48,6 +54,34 @@ public class MemberService {
                 member.getNickname(),
                 member.getEmail()
         );
+    }
+
+    public MemberProfileResponseDto updateProfile(Long memberId, ProfileUpdateRequestDto requestDto) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
+
+        if (memberRepository.existsByEmailAndIdNot(requestDto.email(), memberId)) {
+            throw new DuplicateEmailException("이미 존재하는 이메일입니다: " + requestDto.email());
+        }
+
+        member.updateProfile(requestDto.nickname(), requestDto.email(), requestDto.phone());
+
+        return new MemberProfileResponseDto(
+                member.getId(),
+                member.getMemberNum(),
+                member.getNickname(),
+                member.getEmail(),
+                member.getPhone()
+        );
+    }
+
+    public void withdraw(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
+
+        meetingMemberRepository.deleteAllByMemberId(memberId);
+        meetingRepository.clearCreatedByMemberId(memberId);
+        memberRepository.delete(member);
     }
 
     public LoginResponseDto login(LoginRequestDto requestDto) {
@@ -63,8 +97,8 @@ public class MemberService {
         String jwtToken = jwtTokenProvider.generateToken(member.getId(), member.getEmail());
 
         return new LoginResponseDto(
-                jwtToken,    // accessToken
-                member.getId(),
+                jwtToken,
+                member.getMemberNum(),
                 member.getNickname(),
                 member.getPhone(),
                 member.getEmail()

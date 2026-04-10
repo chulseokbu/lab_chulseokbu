@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/core/theme/app_colors.dart';
-// 💡 아래 두 import 경로를 프로젝트의 실제 위치에 맞게 반드시 확인해주세요.
+import 'package:frontend/core/stay_heatmap.dart';
 import 'package:frontend/services/lab_stay_service.dart';
 import 'package:frontend/models/lab_stay_models.dart';
-import 'package:intl/intl.dart';
 
 class AttendanceStatusCard extends StatefulWidget {
   const AttendanceStatusCard({super.key});
@@ -75,15 +73,13 @@ class AttendanceStatusCardState extends State<AttendanceStatusCard> {
       String dateKey = "${_now.year}-${_now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
       String? duration = _stayDurationMap[dateKey];
 
-      // '1분' 이상의 기록이 있는 날만 출석으로 인정
-      bool isAttended = duration != null && duration.contains(RegExp(r'[1-9]'));
+      final minutes = StayHeatmap.parseDurationToMinutes(duration);
+      final isAttended = minutes > 0;
 
       if (isAttended) {
         attendedCount++;
         currentConsecutive++;
         if (currentConsecutive > maxConsecutive) maxConsecutive = currentConsecutive;
-
-        int minutes = _parseDurationToMinutes(duration);
         int weekIdx = (day + firstWeekday - 2) ~/ 7;
         weeklyMins[weekIdx] = (weeklyMins[weekIdx] ?? 0) + minutes;
       } else {
@@ -95,36 +91,6 @@ class AttendanceStatusCardState extends State<AttendanceStatusCard> {
     _consecutiveDays = maxConsecutive;
     _attendanceRate = (totalDaysInMonth > 0) ? (attendedCount / totalDaysInMonth) * 100 : 0;
     _weeklyTotalMinutes = weeklyMins;
-  }
-
-  // 문자열 시간을 분 단위로 변환
-  int _parseDurationToMinutes(String duration) {
-    int total = 0;
-    try {
-      if (duration.contains('시간')) {
-        final parts = duration.split('시간');
-        total += (int.tryParse(parts[0].trim()) ?? 0) * 60;
-        if (parts.length > 1) {
-          total += int.tryParse(parts[1].replaceAll('분', '').trim()) ?? 0;
-        }
-      } else {
-        total += int.tryParse(duration.replaceAll('분', '').trim()) ?? 0;
-      }
-    } catch (e) { return 0; }
-    return total;
-  }
-
-  // 시간에 따른 색상 진도 조절
-  Color _getHeatmapColor(String? duration) {
-    if (duration == null || duration == "0분" || !duration.contains(RegExp(r'[1-9]'))) {
-      return Colors.grey.shade100;
-    }
-    if (duration.contains('시간')) {
-      int hours = int.tryParse(duration.split('시간')[0]) ?? 0;
-      if (hours >= 4) return Colors.orange.shade600;
-      return Colors.orange.shade400;
-    }
-    return Colors.orange.shade200;
   }
 
   @override
@@ -167,10 +133,7 @@ class AttendanceStatusCardState extends State<AttendanceStatusCard> {
     return Row(
       children: [
         const Text('빈도 ', style: TextStyle(fontSize: 10, color: Colors.grey)),
-        _legendBox(Colors.grey.shade100),
-        _legendBox(Colors.orange.shade200),
-        _legendBox(Colors.orange.shade400),
-        _legendBox(Colors.orange.shade600),
+        ...StayHeatmap.legendColors.map(_legendBox),
       ],
     );
   }
@@ -220,7 +183,9 @@ class AttendanceStatusCardState extends State<AttendanceStatusCard> {
                 child: Container(
                   margin: const EdgeInsets.all(2.5),
                   decoration: BoxDecoration(
-                    color: isDateInMonth ? _getHeatmapColor(_stayDurationMap[dateKey]) : Colors.transparent,
+                    color: isDateInMonth
+                        ? StayHeatmap.colorForDurationString(_stayDurationMap[dateKey])
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),

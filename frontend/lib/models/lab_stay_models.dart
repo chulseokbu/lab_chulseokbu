@@ -27,9 +27,23 @@ class DailyStayRecord {
     this.duration,
   });
 
-  factory DailyStayRecord.fromJson(Map<String, dynamic> json) =>
-      DailyStayRecord(
-        date: json['date'] as String?,
-        duration: json['duration'] as String?,
-      );
+  factory DailyStayRecord.fromJson(Map<String, dynamic> json) {
+    final date = json['date'] as String?;
+    String? duration = json['duration'] as String?;
+    if (duration == null || duration.isEmpty) {
+      final sm = json['stayMinutes'];
+      final minutes = sm is int ? sm : int.tryParse(sm?.toString() ?? '') ?? 0;
+      duration = _minutesToDurationLabel(minutes);
+    }
+    return DailyStayRecord(date: date, duration: duration);
+  }
+
+  static String _minutesToDurationLabel(int minutes) {
+    if (minutes <= 0) return '0분';
+    if (minutes < 60) return '$minutes분';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (m == 0) return '$h시간';
+    return '$h시간 $m분';
+  }
 }

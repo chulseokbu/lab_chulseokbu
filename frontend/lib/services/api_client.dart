@@ -1,4 +1,6 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:frontend/api/api_config.dart';
 import 'package:http/http.dart' as http;
 
@@ -11,11 +13,17 @@ class ApiClient {
 
   String? _accessToken;
 
-  // 💡 로그인 성공 시 호출하여 토큰을 저장하는 메서드
+  /// 빈 문자열은 null과 동일하게 취급. (substring 디버그 로그는 짧은 문자열에서 RangeError 나지 않게 처리)
   void setToken(String? token) {
-    _accessToken = token;
-    // 💡 아래 로그를 추가해서 토큰이 들어오는지 강제로 확인합니다.
-    print("DEBUG: ApiClient에 새로운 토큰이 주입됨 -> ${token?.substring(0, 10)}...");
+    final t = token?.trim();
+    _accessToken = (t == null || t.isEmpty) ? null : t;
+    if (kDebugMode) {
+      final p = _accessToken;
+      final preview = p == null
+          ? 'null'
+          : (p.length <= 12 ? '(len ${p.length})' : '${p.substring(0, 12)}…');
+      debugPrint('ApiClient.setToken -> $preview');
+    }
   }
 
   // 💡 현재 저장된 토큰이 있는지 확인하는 게터 (디버깅용)

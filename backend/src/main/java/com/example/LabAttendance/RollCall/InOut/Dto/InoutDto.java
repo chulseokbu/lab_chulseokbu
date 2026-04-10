@@ -1,23 +1,22 @@
 package com.example.LabAttendance.RollCall.InOut.Dto;
 
 import com.example.LabAttendance.RollCall.InOut.InOut;
-
-import java.time.LocalDate;
-import java.time.LocalTime;
+import com.example.LabAttendance.RollCall.global.KoreaTime;
 
 public record InoutDto(
-        Long inOutId,
-        LocalDate date,
-        LocalTime startTime,
-        LocalTime endTime
+        Long inoutId,
+        String date,
+        String checkIn,
+        String checkOut
 ) {
 
     public static InoutDto from(InOut inOut) {
+        var d = inOut.getAttendance().getDate();
         return new InoutDto(
                 inOut.getId(),
-                inOut.getAttendance().getDate(),
-                inOut.getStartTime(),
-                inOut.getEndTime()
+                d.toString(),
+                KoreaTime.formatOffsetDateTime(d, inOut.getStartTime()),
+                KoreaTime.formatOffsetDateTime(d, inOut.getEndTime())
         );
     }
 }

@@ -1,14 +1,14 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 클립보드 복사 기능을 위해 필요
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:frontend/api/api_config.dart';
 import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/Group_Tab/widgets/meeting_action_card.dart';
 import 'package:frontend/Group_Tab/widgets/meeting_card.dart';
 import 'package:frontend/HomeTab/Views/daily_status_view.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
-import 'package:frontend/models/meeting.dart';
+import 'package:frontend/models/meeting.dart' show Meeting, meetingRoleFromApi;
 
 class MeetingListScreen extends StatefulWidget {
   const MeetingListScreen({super.key});
@@ -36,13 +36,13 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
       final profile = await profileService.loadProfile();
       final token = profile['accessToken'];
 
-      if (token == null) {
+      if (token == null || token.isEmpty) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
       final response = await http.get(
-        Uri.parse('https://labchulseokbu-production.up.railway.app/lab/meetings'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetings}'),
         headers: {
           'Accept': '*/*',
           'Authorization': 'Bearer $token',
@@ -56,12 +56,19 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
 
         if (mounted) {
           setState(() {
-            _meetings = fetchedData.map((m) => Meeting(
-              code: (m['code'] ?? '').toString(),
-              name: m['name'] ?? '이름 없음',
-              memberCount: m['memberCount'] ?? 1,
-              createdAt: m['createdAt'] ?? '',
-            )).toList();
+            _meetings = fetchedData.map((m) {
+              final map = m is Map<String, dynamic>
+                  ? m
+                  : <String, dynamic>{};
+              return Meeting(
+                meetingId: _parseMeetingId(map),
+                code: (map['inviteCode'] ?? map['code'] ?? '').toString(),
+                name: map['name']?.toString() ?? '이름 없음',
+                memberCount: map['memberCount'] as int? ?? 0,
+                createdAt: map['createdAt']?.toString() ?? '',
+                myRole: meetingRoleFromApi(map['myRole']),
+              );
+            }).toList();
             _isLoading = false;
           });
         }
@@ -72,6 +79,135 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
       debugPrint("❌ 에러 발생: $e");
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  int? _parseMeetingId(dynamic item) {
+    if (item is! Map<String, dynamic>) return null;
+    final dynamic rawId = item['meetingId'] ?? item['id'] ?? item['meeting_id'];
+    if (rawId is int) return rawId;
+    return int.tryParse(rawId?.toString() ?? '');
+  }
+
+  String _extractServerMessage(http.Response response) {
+    try {
+      final dynamic decoded = json.decode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic>) {
+        return (decoded['message'] ?? '').toString().trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// 모임 참여 등 디버깅용: 상태코드·본문·예외를 한 문자열로 묶는다.
+  String _formatJoinDiagnostic({
+    required int? statusCode,
+    required String serverMessage,
+    required String responseBody,
+    String? clientException,
+    String? requestUrl,
+  }) {
+    final b = StringBuffer();
+    if (clientException != null && clientException.isNotEmpty) {
+      b.writeln('=== 클라이언트 예외 ===');
+      b.writeln(clientException);
+      b.writeln();
+    }
+    if (requestUrl != null && requestUrl.isNotEmpty) {
+      b.writeln('요청: $requestUrl');
+    }
+    if (statusCode != null) {
+      b.writeln('HTTP 상태: $statusCode');
+    }
+    if (serverMessage.isNotEmpty) {
+      b.writeln('서버 message: $serverMessage');
+    }
+    b.writeln('--- 응답 본문 ---');
+    final body = responseBody.trim();
+    b.writeln(body.isEmpty ? '(비어 있음)' : body);
+    return b.toString().trim();
+  }
+
+  Future<void> _showAlert(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('안내'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 참여 실패 시 상세 오류 + 클립보드 복사
+  Future<void> _showJoinErrorDetail({
+    required String summary,
+    required String detailText,
+  }) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('모임 참여 오류'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                summary,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      detailText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        fontFamily: 'monospace',
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final full =
+                  '$summary\n\n${detailText.trim()}'.trim();
+              await Clipboard.setData(ClipboardData(text: full));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('오류 내용을 복사했습니다.')),
+              );
+            },
+            child: const Text('복사'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCreateMeetingDialog() {
@@ -103,13 +239,16 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Text('모임 참여', style: TextStyle(fontWeight: FontWeight.bold)),
             content: TextField(
               controller: codeController,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]')),
+              ],
               decoration: InputDecoration(
                 labelText: '모임 코드 입력',
                 hintText: '초대 코드를 입력하세요',
@@ -119,36 +258,121 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isJoining ? null : () => Navigator.pop(context),
+                onPressed:
+                    isJoining ? null : () => Navigator.of(dialogContext).pop(),
                 child: const Text('취소', style: TextStyle(color: Colors.grey)),
               ),
               ElevatedButton(
                 onPressed: isJoining ? null : () async {
                   final code = codeController.text.trim();
                   if (code.isEmpty) return;
+                  final joinUrl = '${ApiConfig.baseUrl}${ApiConfig.joinMeeting}';
                   setDialogState(() => isJoining = true);
                   try {
                     final profileService = ProfileService();
                     final profile = await profileService.loadProfile();
                     final token = profile['accessToken'];
-                    var response = await http.post(
-                      Uri.parse('https://labchulseokbu-production.up.railway.app/lab/meetings/join'),
+                    if (token == null || token.toString().trim().isEmpty) {
+                      if (!mounted) return;
+                      Navigator.of(context, rootNavigator: true).pop();
+                      await _showJoinErrorDetail(
+                        summary: '로그인이 필요합니다.',
+                        detailText: _formatJoinDiagnostic(
+                          statusCode: null,
+                          serverMessage: '',
+                          responseBody: '',
+                          requestUrl: joinUrl,
+                          clientException:
+                              '저장된 accessToken이 없습니다. 로그인 후 다시 시도해 주세요.',
+                        ),
+                      );
+                      return;
+                    }
+
+                    final response = await http.post(
+                      Uri.parse(joinUrl),
                       headers: {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer $token'
                       },
-                      body: json.encode({"code": code}),
+                      // Railway 프로덕션: code 필드 필수. 로컬/기타: inviteCode 병행.
+                      body: json.encode({'code': code, 'inviteCode': code}),
                     );
+                    final rawBody = utf8.decode(response.bodyBytes);
+                    final message = _extractServerMessage(response);
+                    final diagnostic = _formatJoinDiagnostic(
+                      statusCode: response.statusCode,
+                      serverMessage: message,
+                      responseBody: rawBody,
+                      requestUrl: joinUrl,
+                    );
+
                     if (response.statusCode == 200 || response.statusCode == 201) {
-                      if (mounted) {
-                        Navigator.pop(context);
-                        _fetchMyMeetings();
-                      }
+                      if (!mounted) return;
+                      Navigator.of(context, rootNavigator: true).pop();
+                      await _fetchMyMeetings();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('모임 참여가 완료되었습니다.')),
+                      );
+                      return;
                     }
-                  } catch (e) {
-                    debugPrint("Join Error: $e");
+
+                    if (!mounted) return;
+                    Navigator.of(context, rootNavigator: true).pop();
+
+                    final bool isAlreadyJoined = response.statusCode == 409 ||
+                        (response.statusCode == 400 &&
+                            message.contains('이미') &&
+                            (message.contains('참여') ||
+                                message.contains('가입')));
+                    if (isAlreadyJoined) {
+                      await _showJoinErrorDetail(
+                        summary: '이미 이 모임에 참여 중입니다.',
+                        detailText: diagnostic,
+                      );
+                      return;
+                    }
+
+                    final bool isInvalidMeeting =
+                        response.statusCode == 404 ||
+                            message.contains('존재하지') ||
+                            message.contains('유효하지');
+                    if (isInvalidMeeting) {
+                      await _showJoinErrorDetail(
+                        summary:
+                            '모임을 찾을 수 없거나 초대 코드가 올바르지 않습니다.',
+                        detailText: diagnostic,
+                      );
+                      return;
+                    }
+
+                    await _showJoinErrorDetail(
+                      summary: message.isNotEmpty
+                          ? message
+                          : '모임 참여 요청이 실패했습니다. (HTTP ${response.statusCode})',
+                      detailText: diagnostic,
+                    );
+                  } catch (e, st) {
+                    debugPrint("Join Error: $e\n$st");
+                    if (!mounted) return;
+                    Navigator.of(context, rootNavigator: true).pop();
+                    await _showJoinErrorDetail(
+                      summary: '네트워크 또는 클라이언트 오류가 발생했습니다.',
+                      detailText: _formatJoinDiagnostic(
+                        statusCode: null,
+                        serverMessage: '',
+                        responseBody: '',
+                        requestUrl: joinUrl,
+                        clientException: '$e\n\n$st',
+                      ),
+                    );
                   } finally {
-                    if (mounted) setDialogState(() => isJoining = false);
+                    if (mounted) {
+                      try {
+                        setDialogState(() => isJoining = false);
+                      } catch (_) {}
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -163,6 +387,17 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _goMeetingDetail(Meeting meeting) {
+    if (meeting.meetingId == null) {
+      _showAlert('해당 모임 정보를 불러올 수 없습니다. 목록을 새로고침해 주세요.');
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => DailyStatusView(meeting: meeting)),
     );
   }
 
@@ -204,7 +439,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: MeetingCard(
                       meeting: meeting,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DailyStatusView())),
+                      onTap: () => _goMeetingDetail(meeting),
                     ),
                   )),
                 const SizedBox(height: 100),
@@ -239,7 +474,7 @@ class _InternalCreateMeetingDialogState extends State<_InternalCreateMeetingDial
       final profile = await profileService.loadProfile();
       final token = profile['accessToken'];
       final response = await http.post(
-        Uri.parse('https://labchulseokbu-production.up.railway.app/lab/meetings'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.meetings}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -247,8 +482,15 @@ class _InternalCreateMeetingDialogState extends State<_InternalCreateMeetingDial
         body: json.encode({"name": name}),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        setState(() => _serverCode = data['data']['code']?.toString());
+        final data =
+            json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final inner = data['data'];
+        if (inner is Map<String, dynamic>) {
+          final code = (inner['inviteCode'] ?? inner['code'])?.toString();
+          if (code != null && code.isNotEmpty) {
+            setState(() => _serverCode = code);
+          }
+        }
       }
     } catch (e) {
       debugPrint("❌ 생성 에러: $e");
