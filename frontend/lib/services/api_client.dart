@@ -64,6 +64,22 @@ class ApiClient {
     );
   }
 
+  /// 인증 헤더 없이 POST (애플 로그인·최초 가입 등 — 만료된 Bearer가 붙으면 서버가 403 낼 수 있음)
+  Future<http.Response> postWithoutAuth(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$path');
+    return http.post(
+      url,
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: body != null ? jsonEncode(body) : null,
+    );
+  }
+
   // 💡 로그아웃 시 토큰을 비워주는 메서드 (필요 시 사용)
   void clearToken() {
     _accessToken = null;

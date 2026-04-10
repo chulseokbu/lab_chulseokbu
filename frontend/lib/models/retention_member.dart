@@ -1,5 +1,6 @@
 /// 잔류 현황 멤버 데이터
 class RetentionMember {
+  final int? memberId;
   final String name;
   final String role;
   final String initial;
@@ -10,6 +11,7 @@ class RetentionMember {
   final String? duration;
 
   const RetentionMember({
+    this.memberId,
     required this.name,
     required this.role,
     required this.initial,

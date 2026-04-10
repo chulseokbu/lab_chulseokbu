@@ -15,6 +15,7 @@ class LabAttendanceApp extends StatelessWidget {
     return MaterialApp(
       title: '랩실 출석부',
       theme: AppTheme.light,
+      debugShowCheckedModeBanner: false,
       home: const AuthGate(),
     );
   }

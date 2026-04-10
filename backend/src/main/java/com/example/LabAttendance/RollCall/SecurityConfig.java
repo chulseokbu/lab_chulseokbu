@@ -65,6 +65,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/lab/users/sign",
                                 "/lab/users/login",
+                                "/lab/users/auth/apple",
+                                "/lab/users/auth/apple/complete",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"

@@ -64,43 +64,59 @@ class _HomePageState extends State<HomePage> {
   // -> 출석 데이터는 _attendanceKey.currentState?.fetchMonthlyAttendance()를 통해
   //    AttendanceStatusCard 위젯이 직접 최신화하므로 여기서 중복으로 가져올 필요가 없습니다.
 
+  Future<void> _refreshHomeTab() async {
+    await _labStatusKey.currentState?.refreshFromServer();
+    if (!mounted) return;
+    setState(() {
+      _currentCheckInTime =
+          _labStatusKey.currentState?.checkInTimeForNotification;
+    });
+    await _attendanceKey.currentState?.fetchMonthlyAttendance();
+    await _loadUserData();
+  }
+
   List<Widget> _buildTabContents() {
     return [
-      SingleChildScrollView(
-        child: Container(
-          color: AppColors.background,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              LabStatusCard(
-                key: _labStatusKey,
-                onStatusUpdated: (DateTime? time) {
-                  setState(() {
-                    _currentCheckInTime = time;
-                  });
-                  void refreshAttendance() {
-                    _attendanceKey.currentState?.fetchMonthlyAttendance();
-                  }
+      RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _refreshHomeTab,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            color: AppColors.background,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LabStatusCard(
+                  key: _labStatusKey,
+                  onStatusUpdated: (DateTime? time) {
+                    setState(() {
+                      _currentCheckInTime = time;
+                    });
+                    void refreshAttendance() {
+                      _attendanceKey.currentState?.fetchMonthlyAttendance();
+                    }
 
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    refreshAttendance();
-                    Future<void>.delayed(
-                      const Duration(milliseconds: 400),
-                      refreshAttendance,
-                    );
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              AttendanceStatusCard(key: _attendanceKey),
-              const SizedBox(height: 16),
-              NotificationView(
-                embedded: true,
-                checkInTime: _currentCheckInTime,
-              ),
-              const SizedBox(height: 100),
-            ],
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      refreshAttendance();
+                      Future<void>.delayed(
+                        const Duration(milliseconds: 400),
+                        refreshAttendance,
+                      );
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                AttendanceStatusCard(key: _attendanceKey),
+                const SizedBox(height: 16),
+                NotificationView(
+                  embedded: true,
+                  checkInTime: _currentCheckInTime,
+                ),
+                const SizedBox(height: 100),
+              ],
+            ),
           ),
         ),
       ),
@@ -122,8 +138,8 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Icon(Icons.menu_book_rounded, color: AppColors.primary, size: 24),
             const SizedBox(width: 8),
-            Text(_selectedIndex == 0 ? '출석뷰' : '랩실 출석부',
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('출석뷰',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [

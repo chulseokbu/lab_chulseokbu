@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:frontend/core/theme/app_colors.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:frontend/HomeTab/AuthTab/apple_onboarding_screen.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/services/api_client.dart';
+import 'package:frontend/services/apple_auth_service.dart';
+import 'package:frontend/services/auth_service.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'dart:convert';
 // --- 1. 로그인 화면 ---
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.onLoginSuccess, required this.onGoToSignUp});
@@ -20,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _appleLoading = false;
 
   Future<void> _handleLogin() async {
     if (!_loginFormKey.currentState!.validate()) return;
@@ -73,19 +78,141 @@ class _LoginScreenState extends State<LoginScreen> {
         widget.onLoginSuccess();
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('로그인 실패: 이메일 또는 비밀번호를 확인하세요.'))
-        );
+        debugPrint('[login] 실패: 이메일 또는 비밀번호 불일치');
       }
     } catch (e) {
       debugPrint("Login Detail Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('로그인 중 오류가 발생했습니다.'))
-        );
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _orDivider() {
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: AppColors.textHint.withOpacity(0.35),
+            thickness: 1,
+            endIndent: 16,
+          ),
+        ),
+        Text(
+          '또는',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        Expanded(
+          child: Divider(
+            color: AppColors.textHint.withOpacity(0.35),
+            thickness: 1,
+            indent: 16,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleAppleLogin(BuildContext context) async {
+    if (_appleLoading) return;
+    setState(() => _appleLoading = true);
+    try {
+      final available = await SignInWithApple.isAvailable();
+      if (!available) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('이 기기에서는 Apple 로그인을 사용할 수 없습니다.')),
+          );
+        }
+        return;
+      }
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      if (!context.mounted) return;
+
+      final rawIdentity = credential.identityToken;
+      final authCode = credential.authorizationCode;
+      final token = (rawIdentity != null && rawIdentity.isNotEmpty)
+          ? rawIdentity
+          : authCode;
+      if (token.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('애플 로그인 토큰을 받지 못했습니다.')),
+          );
+        }
+        return;
+      }
+
+      final nameParts = <String?>[
+        credential.givenName,
+        credential.familyName,
+      ].whereType<String>().where((s) => s.isNotEmpty).toList();
+      final nameHint =
+          nameParts.isEmpty ? null : nameParts.join(' ');
+
+      final result = await AppleAuthService.instance.loginWithAppleToken(
+        identityToken: token,
+        authorizationCode: authCode,
+        userIdentifier: credential.userIdentifier,
+      );
+
+      if (!context.mounted) return;
+
+      if (result is AppleAuthLoggedIn) {
+        final dto = result.dto;
+        if (dto.accessToken == null || dto.accessToken!.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('서버 응답에 토큰이 없습니다. 백엔드 애플 로그인 API를 확인해주세요.'),
+            ),
+          );
+          return;
+        }
+        await AuthService.instance.applyLoginSuccess(dto);
+        widget.onLoginSuccess();
+      } else if (result is AppleAuthNeedsProfile) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (ctx) => AppleOnboardingScreen(
+              identityToken: token,
+              authorizationCode: authCode,
+              userIdentifier: credential.userIdentifier,
+              emailHint: credential.email,
+              nameHint: nameHint,
+              onComplete: () {
+                Navigator.of(ctx).pop();
+                widget.onLoginSuccess();
+              },
+            ),
+          ),
+        );
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code != AuthorizationErrorCode.canceled && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Apple 로그인 오류: ${e.message}')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _appleLoading = false);
     }
   }
 
@@ -174,6 +301,69 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                                 : const Text('로그인', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                           ),
+                        ),
+                        FutureBuilder<bool>(
+                          future: SignInWithApple.isAvailable(),
+                          builder: (context, snap) {
+                            if (snap.connectionState != ConnectionState.done ||
+                                snap.data != true) {
+                              return const SizedBox.shrink();
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 24),
+                                _orDivider(),
+                                const SizedBox(height: 14),
+                                SizedBox(
+                                  height: 58,
+                                  child: ElevatedButton(
+                                    onPressed: (_isLoading || _appleLoading)
+                                        ? null
+                                        : () => _handleAppleLogin(context),
+                                    style: ElevatedButton.styleFrom(
+                                      elevation: 0,
+                                      backgroundColor: const Color(0xFF1A1A1A),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: SvgPicture.asset(
+                                            'assets/auth/apple_icon.svg',
+                                            height: 20,
+                                            width: 20,
+                                          ),
+                                        ),
+                                        _appleLoading
+                                            ? const SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child: CircularProgressIndicator(
+                                                  color: Colors.white,
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : const Text(
+                                                'Apple로 시작하기',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 28),
                         Row(
@@ -289,7 +479,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         widget.onGoToLogin();
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('회원가입 실패: 정보를 확인하세요.')));
+        debugPrint('[signup] 실패 status=${response.statusCode}');
       }
     } catch (e) {
       debugPrint("SignUp Error: $e");

@@ -7,12 +7,15 @@ import 'package:frontend/api/api_config.dart';
 import 'package:frontend/core/kst_calendar.dart';
 import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
-import 'package:frontend/models/meeting.dart' show Meeting, meetingRoleFromApi;
+import 'package:frontend/models/meeting.dart'
+    show Meeting, MeetingRole, meetingRoleFromApi;
 import 'package:frontend/models/retention_member.dart';
+import 'package:frontend/widgets/other_member_profile_sheet.dart';
 
 /// API에서 받은 잔류 행(체류 시간은 빌드 시 `_liveDuration`으로 계산)
 class _RetentionRow {
   const _RetentionRow({
+    required this.memberId,
     required this.name,
     required this.initial,
     required this.isPresent,
@@ -21,6 +24,7 @@ class _RetentionRow {
     required this.roleLabel,
   });
 
+  final int memberId;
   final String name;
   final String initial;
   final bool isPresent;
@@ -44,8 +48,6 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
 
   bool _meetingsLoading = true;
   bool _retentionLoading = false;
-  String? _meetingsError;
-  String? _retentionError;
 
   Timer? _ticker;
 
@@ -100,7 +102,6 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
   Future<void> _loadInitial() async {
     setState(() {
       _meetingsLoading = true;
-      _meetingsError = null;
     });
     await _fetchMeetings();
     if (!mounted) return;
@@ -114,10 +115,10 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
     try {
       final token = await _getToken();
       if (token == null) {
+        debugPrint('[retention tab] 토큰 없음');
         if (mounted) {
           setState(() {
             _meetings = [];
-            _meetingsError = '로그인이 필요합니다.';
           });
         }
         return;
@@ -132,9 +133,9 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
       );
 
       if (response.statusCode != 200) {
+        debugPrint('[retention tab] 모임 목록 HTTP ${response.statusCode}');
         if (mounted) {
           setState(() {
-            _meetingsError = '모임 목록을 불러오지 못했습니다.';
             _meetings = [];
           });
         }
@@ -162,13 +163,12 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
       if (!mounted) return;
       setState(() {
         _meetings = fetched;
-        _meetingsError = null;
         if (_selectedIndex >= _meetings.length) _selectedIndex = 0;
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[retention tab] 모임 목록 $e\n$st');
       if (mounted) {
         setState(() {
-          _meetingsError = '네트워크 오류입니다.';
           _meetings = [];
         });
       }
@@ -176,6 +176,10 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
   }
 
   _RetentionRow _rowFromJson(Map<String, dynamic> json) {
+    final idRaw = json['memberId'];
+    final memberId = idRaw is int
+        ? idRaw
+        : int.tryParse(idRaw?.toString() ?? '') ?? 0;
     final name = (json['name'] ?? '').toString();
     final initial0 = (json['initial'] ?? '').toString();
     final initial = initial0.isNotEmpty
@@ -199,6 +203,7 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
     }
 
     return _RetentionRow(
+      memberId: memberId,
       name: name,
       initial: initial,
       isPresent: isPresent,
@@ -223,17 +228,16 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
     if (showSpinner && mounted) {
       setState(() {
         _retentionLoading = true;
-        _retentionError = null;
       });
     }
 
     try {
       final token = await _getToken();
       if (token == null) {
+        debugPrint('[retention tab] 잔류 조회 토큰 없음');
         if (mounted) {
           setState(() {
             _retentionLoading = false;
-            _retentionError = '로그인이 필요합니다.';
             _rows = [];
           });
         }
@@ -263,24 +267,23 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
         setState(() {
           _rows = rows;
           _retentionLoading = false;
-          _retentionError = null;
         });
         return;
       }
 
       if (!mounted) return;
+      debugPrint(
+        '[retention tab] 잔류 HTTP ${response.statusCode} $serverMessage',
+      );
       setState(() {
         _retentionLoading = false;
-        _retentionError = serverMessage.isNotEmpty
-            ? serverMessage
-            : '잔류 현황을 불러오지 못했습니다.';
         _rows = [];
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[retention tab] 잔류 $e\n$st');
       if (mounted) {
         setState(() {
           _retentionLoading = false;
-          _retentionError = '네트워크 오류입니다.';
           _rows = [];
         });
       }
@@ -302,7 +305,6 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
     setState(() {
       _selectedIndex = index;
       _rows = [];
-      _retentionError = null;
     });
     _fetchRetention(showSpinner: true);
   }
@@ -314,6 +316,7 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
 
   RetentionMember _toDisplayMember(_RetentionRow r) {
     return RetentionMember(
+      memberId: r.memberId > 0 ? r.memberId : null,
       name: r.name,
       role: r.roleLabel,
       initial: r.initial,
@@ -350,20 +353,6 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
                     ),
                   ),
                 )
-              else if (_meetingsError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 48),
-                  child: Center(
-                    child: Text(
-                      _meetingsError!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
               else if (_meetings.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 48),
@@ -381,9 +370,14 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
                 )
               else ...[
                 SizedBox(
-                  height: 36,
+                  height: 40,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
+                    primary: false,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(right: 8),
                     itemCount: _meetings.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
@@ -482,20 +476,6 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
                         width: 26,
                         height: 26,
                         child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  )
-                else if (_retentionError != null && _rows.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(
-                        _retentionError!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                   )
@@ -603,6 +583,13 @@ class _MemberRetentionCard extends StatelessWidget {
   static const Color _checkInGreen = Color(0xFF2E7D32);
   static const Color _checkOutRed = Color(0xFFC62828);
 
+  MeetingRole? get _roleEnum {
+    final r = member.role.trim();
+    if (r == '모임장') return MeetingRole.leader;
+    if (r == '구성원') return MeetingRole.member;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final timeLine = member.isPresent
@@ -620,15 +607,30 @@ class _MemberRetentionCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.18),
-            child: Text(
-              member.initial,
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              showOtherMemberProfile(
+                context,
+                displayName: member.name,
+                initial: member.initial,
+                meetingRole: _roleEnum,
+                roleLabel: member.role.trim().isNotEmpty ? member.role : null,
+                isPresent: member.isPresent,
+                checkIn: member.checkIn,
+                lastExit: member.lastExit,
+              );
+            },
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.18),
+              child: Text(
+                member.initial,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),

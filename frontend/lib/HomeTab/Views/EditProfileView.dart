@@ -90,9 +90,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
     if (ok != true || !mounted) return;
     if (password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('비밀번호를 입력해 주세요.')),
-      );
+      debugPrint('[withdraw] 비밀번호 비어 있음');
       return;
     }
 
@@ -102,9 +100,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
       Navigator.pop(context);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    debugPrint('[withdraw] $message');
   }
 
   @override
@@ -236,7 +232,30 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: TextButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('로그아웃'),
+                        content: const Text(
+                          '로그아웃하면 다시 로그인해야 합니다.\n계속할까요?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('취소'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text(
+                              '로그아웃',
+                              style: TextStyle(color: AppColors.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok != true || !context.mounted) return;
                     Navigator.pop(context);
                     widget.onLogout!();
                   },
