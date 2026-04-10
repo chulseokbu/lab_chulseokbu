@@ -69,6 +69,7 @@ class LoginResponseDto {
   final String? username;
   final String? phone;
   final String? email;
+  final String? studentId;
 
   LoginResponseDto({
     this.accessToken,
@@ -76,14 +77,71 @@ class LoginResponseDto {
     this.username,
     this.phone,
     this.email,
+    this.studentId,
   });
 
-  factory LoginResponseDto.fromJson(Map<String, dynamic> json) =>
-      LoginResponseDto(
-        accessToken: json['accessToken'] as String?,
-        memberId: json['memberId'] as int?,
-        username: json['username'] as String?,
-        phone: json['phone'] as String?,
-        email: json['email'] as String?,
-      );
+  static int? _parseInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
+  }
+
+  static String? _str(dynamic v) {
+    if (v == null) return null;
+    if (v is String) return v;
+    return v.toString();
+  }
+
+  static Map<String, dynamic>? _map(dynamic v) {
+    if (v is Map<String, dynamic>) return v;
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return null;
+  }
+
+  /// 백엔드마다 `accessToken` / `access_token` / `token` / `data` 래핑 등이 달라서 통일해 파싱
+  static String? _readAccessToken(Map<String, dynamic> json) {
+    const rootKeys = [
+      'accessToken',
+      'access_token',
+      'token',
+      'jwt',
+      'access',
+    ];
+    for (final key in rootKeys) {
+      final s = _str(json[key])?.trim();
+      if (s != null && s.isNotEmpty) return s;
+    }
+    for (final nest in ['data', 'result', 'body']) {
+      final inner = _map(json[nest]);
+      if (inner == null) continue;
+      for (final key in rootKeys) {
+        final s = _str(inner[key])?.trim();
+        if (s != null && s.isNotEmpty) return s;
+      }
+    }
+    return null;
+  }
+
+  factory LoginResponseDto.fromJson(Map<String, dynamic> json) {
+    final nestedUser = _map(json['user']) ?? _map(json['member']);
+    return LoginResponseDto(
+      accessToken: _readAccessToken(json),
+      memberId: _parseInt(json['memberId']) ??
+          _parseInt(json['id']) ??
+          (nestedUser != null
+              ? (_parseInt(nestedUser['memberId']) ?? _parseInt(nestedUser['id']))
+              : null),
+      username: _str(json['username']) ??
+          _str(json['nickname']) ??
+          (nestedUser != null
+              ? (_str(nestedUser['username']) ?? _str(nestedUser['nickname']))
+              : null),
+      phone: _str(json['phone']) ??
+          (nestedUser != null ? _str(nestedUser['phone']) : null),
+      email: _str(json['email']) ??
+          (nestedUser != null ? _str(nestedUser['email']) : null),
+      studentId: _str(json['studentId']) ??
+          (nestedUser != null ? _str(nestedUser['studentId']) : null),
+    );
+  }
 }

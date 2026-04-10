@@ -42,6 +42,8 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+	// Sign in with Apple — identityToken(JWS) 검증 (Apple JWKS)
+	implementation 'com.nimbusds:nimbus-jose-jwt:9.40'
 }
 
 tasks.named('test') {

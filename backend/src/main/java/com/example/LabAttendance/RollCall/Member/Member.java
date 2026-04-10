@@ -42,6 +42,10 @@ public class Member {
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Attendance> attandenceList = new ArrayList<>();
 
+    /** Apple `sub` — 동일 사용자 식별. 이메일 로그인만 쓰는 회원은 null */
+    @Column(unique = true, length = 255)
+    private String appleSub;
+
     public void updateProfile(String nickname, String email, String phone) {
         this.nickname = nickname;
         this.email = email;

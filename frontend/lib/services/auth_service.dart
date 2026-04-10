@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:frontend/HomeTab/Views/Profile_Service.dart';
 import 'package:frontend/api/api_config.dart';
 import 'package:frontend/models/auth_models.dart';
 import 'package:frontend/services/api_client.dart';
@@ -45,6 +46,30 @@ class AuthService {
       throw ApiException(_parseValidationError(res.body));
     }
     throw ApiException('로그인에 실패했습니다. (${res.statusCode})');
+  }
+
+  /// 이메일/애플 등 로그인 성공 후 로컬·ApiClient 반영 (LoginScreen 중복 로직 대체용)
+  Future<void> applyLoginSuccess(LoginResponseDto dto) async {
+    final token = dto.accessToken?.trim();
+    if (token != null && token.isNotEmpty) {
+      await _saveAuth(dto);
+      _client.setToken(token);
+    }
+    final profileService = ProfileService();
+    final dynamic rawMemberId = dto.memberId;
+    final int? memberIdInt =
+        (rawMemberId is int) ? rawMemberId : int.tryParse(rawMemberId?.toString() ?? '');
+    await profileService.saveProfile(
+      name: dto.username ?? '',
+      studentId: (dto.studentId != null && dto.studentId!.isNotEmpty)
+          ? dto.studentId!
+          : (dto.memberId?.toString() ?? ''),
+      phone: dto.phone,
+      email: dto.email,
+      accessToken: dto.accessToken,
+      memberId: memberIdInt,
+    );
+    await profileService.generateAndSaveUniqueId();
   }
 
   /// 회원 가입
