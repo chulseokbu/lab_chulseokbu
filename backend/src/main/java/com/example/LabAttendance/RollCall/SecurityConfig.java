@@ -52,19 +52,12 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // H2 콘솔 접근을 위한 설정
-                .headers(headers -> headers
-                        .frameOptions(frameOptions -> frameOptions.disable())
-                )
-
                 // 요청에 대한 접근 권한 설정
                 .authorizeHttpRequests(authorize -> authorize
                         // Spring Boot 기본 에러 엔드포인트 (validation 등)
                         .requestMatchers("/error").permitAll()
                         // Preflight(OPTIONS) 요청 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // H2 Console 경로 허용
-                        .requestMatchers(PathRequest.toH2Console()).permitAll()
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
 
 
