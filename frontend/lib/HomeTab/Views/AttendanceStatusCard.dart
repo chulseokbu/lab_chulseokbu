@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/core/stay_heatmap.dart';
+import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/services/lab_stay_service.dart';
 import 'package:frontend/models/lab_stay_models.dart';
 
@@ -118,7 +119,7 @@ class AttendanceStatusCardState extends State<AttendanceStatusCard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('${_now.month}월 출석 현황', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                _buildLegend(),
+                _buildLegend(context),
               ],
             ),
             const SizedBox(height: 20),
@@ -129,11 +130,141 @@ class AttendanceStatusCardState extends State<AttendanceStatusCard> {
     );
   }
 
-  Widget _buildLegend() {
+  Widget _buildLegend(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         const Text('빈도 ', style: TextStyle(fontSize: 10, color: Colors.grey)),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showFrequencyHelp(context),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(2, 2, 4, 2),
+              child: Icon(
+                Icons.help_outline_rounded,
+                size: 15,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+        ),
         ...StayHeatmap.legendColors.map(_legendBox),
+      ],
+    );
+  }
+
+  void _showFrequencyHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.palette_outlined, color: AppColors.primary, size: 22),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '출석 빈도 색',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '칸 색은 그날 랩실에 머문 총 시간(체류 시간)을 나타냅니다.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade800,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _helpColorRow(
+                Colors.grey.shade100,
+                '출석 없음',
+                '0분 (그날 체류 기록 없음)',
+              ),
+              const SizedBox(height: 10),
+              _helpColorRow(
+                Colors.orange.shade200,
+                '연한 주황',
+                '1시간 미만',
+              ),
+              const SizedBox(height: 10),
+              _helpColorRow(
+                Colors.orange.shade400,
+                '주황',
+                '1시간 이상 ~ 4시간 미만',
+              ),
+              const SizedBox(height: 10),
+              _helpColorRow(
+                Colors.orange.shade600,
+                '진한 주황',
+                '4시간 이상 ~ 8시간 미만',
+              ),
+              const SizedBox(height: 10),
+              _helpColorRow(
+                Colors.orange.shade800,
+                '가장 진한 주황',
+                '8시간 이상',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _helpColorRow(Color color, String title, String subtitle) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey.shade300, width: 0.5),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

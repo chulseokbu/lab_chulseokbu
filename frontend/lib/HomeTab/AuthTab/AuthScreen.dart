@@ -73,17 +73,10 @@ class _LoginScreenState extends State<LoginScreen> {
         widget.onLoginSuccess();
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('로그인 실패: 이메일 또는 비밀번호를 확인하세요.'))
-        );
+        debugPrint('[login] 실패: 이메일 또는 비밀번호 불일치');
       }
     } catch (e) {
       debugPrint("Login Detail Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('로그인 중 오류가 발생했습니다.'))
-        );
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -289,7 +282,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         widget.onGoToLogin();
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('회원가입 실패: 정보를 확인하세요.')));
+        debugPrint('[signup] 실패 status=${response.statusCode}');
       }
     } catch (e) {
       debugPrint("SignUp Error: $e");

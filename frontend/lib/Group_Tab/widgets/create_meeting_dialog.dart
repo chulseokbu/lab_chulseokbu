@@ -49,7 +49,9 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -169,9 +171,7 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
                     onPressed: () {
                       final name = _nameController.text.trim();
                       if (name.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('모임 이름을 입력해주세요.')),
-                        );
+                        debugPrint('[create meeting] 이름 비어 있음');
                         return;
                       }
                       widget.onCreate(name);

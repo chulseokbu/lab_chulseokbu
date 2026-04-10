@@ -9,6 +9,7 @@ import 'package:frontend/core/kst_calendar.dart';
 import 'package:frontend/core/stay_heatmap.dart';
 import 'package:frontend/core/theme/app_colors.dart';
 import 'package:frontend/models/meeting.dart';
+import 'package:frontend/widgets/other_member_profile_sheet.dart';
 import 'package:http/http.dart' as http;
 
 class DailyStatusView extends StatefulWidget {
@@ -24,8 +25,6 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   bool _isListView = false;
   bool _isLoadingMembers = true;
   bool _isLoadingDetail = false;
-  String? _errorMessage;
-
   List<_RetentionMember> _members = [];
   final Map<int, List<_MonthlyStayRecord>> _monthlyByMember = {};
   final Map<int, List<_WeeklyInOutRecord>> _weeklyByMember = {};
@@ -141,6 +140,25 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     return false;
   }
 
+  MeetingRole? _meetingRoleForMemberId(int memberId) {
+    for (final m in _meetingMembers) {
+      if (m.memberId == memberId) return m.role;
+    }
+    return null;
+  }
+
+  void _showOtherMemberProfileFor(_RetentionMember member) {
+    showOtherMemberProfile(
+      context,
+      displayName: member.name,
+      initial: member.initial,
+      meetingRole: _meetingRoleForMemberId(member.memberId),
+      isPresent: member.isPresent,
+      checkIn: member.checkIn,
+      lastExit: member.lastExit,
+    );
+  }
+
   /// 모임 나가기 실패 시 사용자에게 보여 줄 한 줄 요약 (404·Spring 기본 에러 페이지 구분)
   String _leaveFailureSummary({
     required int statusCode,
@@ -189,79 +207,17 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     return b.toString().trim();
   }
 
-  Future<void> _showMeetingActionFailure({
+  void _logMeetingActionFailure({
     required String summary,
     required String detailText,
-  }) async {
-    if (!mounted) return;
+  }) {
     debugPrint('[meeting] $summary\n$detailText');
-    final messenger = ScaffoldMessenger.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('요청 실패'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                summary,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 280),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      detailText,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        fontFamily: 'monospace',
-                        color: Colors.grey.shade800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final full = '$summary\n\n${detailText.trim()}'.trim();
-              await Clipboard.setData(ClipboardData(text: full));
-              messenger.showSnackBar(
-                const SnackBar(content: Text('내용을 복사했습니다.')),
-              );
-            },
-            child: const Text('복사'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _copyInviteCode() async {
     final code = _inviteCode;
     if (code == null || code.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('초대 코드를 불러올 수 없습니다.')),
-        );
-      }
+      debugPrint('[invite] 초대 코드 없음');
       return;
     }
     await Clipboard.setData(ClipboardData(text: code));
@@ -281,7 +237,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
     if (id == null || token == null) {
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: '모임 나가기를 진행할 수 없습니다.',
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -335,7 +291,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         rawBody: rawBody,
       );
 
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: summary,
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -347,7 +303,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     } catch (e, st) {
       debugPrint('[leave] $e\n$st');
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: '모임 나가기 중 오류가 발생했습니다.',
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -369,7 +325,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
     if (id == null || token == null) {
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: '모임 삭제를 진행할 수 없습니다.',
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -416,7 +372,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
       debugPrint('[delete meeting] HTTP ${response.statusCode} $rawBody');
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: msg.isNotEmpty
             ? msg
             : '모임 삭제에 실패했습니다. (HTTP ${response.statusCode})',
@@ -430,7 +386,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     } catch (e, st) {
       debugPrint('[delete meeting] $e\n$st');
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: '모임 삭제 중 오류가 발생했습니다.',
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -452,7 +408,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
     if (id == null || token == null) {
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: '위임 요청을 진행할 수 없습니다.',
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -502,7 +458,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
 
       debugPrint('[delegate] HTTP ${response.statusCode} $rawBody');
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: msg.isNotEmpty
             ? msg
             : '모임장 위임에 실패했습니다. (HTTP ${response.statusCode})',
@@ -516,7 +472,7 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     } catch (e, st) {
       debugPrint('[delegate] $e\n$st');
       if (!mounted) return;
-      await _showMeetingActionFailure(
+      _logMeetingActionFailure(
         summary: '모임장 위임 중 오류가 발생했습니다.',
         detailText: _formatMeetingApiDiagnostic(
           requestUrl: url,
@@ -574,26 +530,14 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Future<void> _showDelegateDialog() async {
     final myId = _myMemberId;
     if (myId == null || myId <= 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '내 회원 정보를 확인할 수 없습니다. 로그인 후 다시 시도해 주세요.',
-            ),
-          ),
-        );
-      }
+      debugPrint('[delegate] 내 memberId 없음');
       return;
     }
     final candidates = _meetingMembers
         .where((m) => m.memberId != myId)
         .toList();
     if (candidates.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('위임할 다른 구성원이 없습니다.')),
-        );
-      }
+      debugPrint('[delegate] 위임 후보 없음');
       return;
     }
 
@@ -641,24 +585,18 @@ class _DailyStatusViewState extends State<DailyStatusView> {
     if (!silent) {
       setState(() {
         _isLoadingMembers = true;
-        _errorMessage = null;
       });
-    } else if (mounted) {
-      setState(() => _errorMessage = null);
     }
 
     try {
       final token = await _getToken();
       if (token == null) {
+        debugPrint('[retention] 토큰 없음');
         if (!silent) {
           setState(() {
             _isLoadingMembers = false;
-            _errorMessage = '로그인이 필요합니다.';
+            _members = [];
           });
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('로그인이 필요합니다.')),
-          );
         }
         return;
       }
@@ -693,41 +631,26 @@ class _DailyStatusViewState extends State<DailyStatusView> {
               ..add(members.first.memberId);
           }
           if (!silent) _isLoadingMembers = false;
-          _errorMessage = null;
         });
         return;
       }
 
+      debugPrint(
+        '[retention] HTTP 실패 ${response.statusCode} $serverMessage',
+      );
       if (!silent) {
         setState(() {
           _isLoadingMembers = false;
-          _errorMessage = serverMessage.isNotEmpty
-              ? serverMessage
-              : '구성원 정보를 불러오지 못했습니다.';
+          _members = [];
         });
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              serverMessage.isNotEmpty
-                  ? serverMessage
-                  : '구성원 정보를 불러오지 못했습니다.',
-            ),
-          ),
-        );
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[retention] $e\n$st');
       if (!silent) {
         setState(() {
           _isLoadingMembers = false;
-          _errorMessage = '네트워크 오류로 구성원 정보를 불러오지 못했습니다.';
+          _members = [];
         });
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('네트워크 오류로 새로고침에 실패했습니다.'),
-          ),
-        );
       }
     }
   }
@@ -880,16 +803,6 @@ class _DailyStatusViewState extends State<DailyStatusView> {
                   padding: EdgeInsets.only(top: 80),
                   child: Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
-                  ),
-                )
-              else if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 80),
-                  child: Center(
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: AppColors.textSecondary),
-                    ),
                   ),
                 )
               else if (_members.isEmpty)
@@ -1100,6 +1013,16 @@ class _DailyStatusViewState extends State<DailyStatusView> {
   Widget _buildMemberCard(_RetentionMember member) {
     final isExpanded = _expandedMemberIds.contains(member.memberId);
     final percentage = _attendanceRate(member.memberId);
+    void toggleExpanded() {
+      setState(() {
+        if (isExpanded) {
+          _expandedMemberIds.remove(member.memberId);
+        } else {
+          _expandedMemberIds.add(member.memberId);
+        }
+      });
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
@@ -1109,109 +1032,133 @@ class _DailyStatusViewState extends State<DailyStatusView> {
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-        initiallyExpanded: isExpanded,
-        shape: const RoundedRectangleBorder(),
-        collapsedShape: const RoundedRectangleBorder(),
-        onExpansionChanged: (expanded) {
-          setState(() {
-            if (expanded) {
-              _expandedMemberIds.add(member.memberId);
-            } else {
-              _expandedMemberIds.remove(member.memberId);
-            }
-          });
-        },
-        tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.14),
-              child: Text(
-                member.initial,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        member.isPresent
-                            ? Icons.check_rounded
-                            : Icons.close_rounded,
-                        size: 17,
-                        color: member.isPresent
-                            ? const Color(0xFF2E7D32)
-                            : const Color(0xFFC62828),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          member.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showOtherMemberProfileFor(member),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: CircleAvatar(
+                      radius: 14,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.14),
+                      child: Text(
+                        member.initial,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
-                  ),
-                  Text(
-                    member.isPresent
-                        ? '체크인 ${KstCalendar.formatCheckTimeForDisplay(member.checkIn, assumeUtcWallOnDate: KstCalendar.ymdFromInstant(DateTime.now()))}'
-                        : '마지막 퇴실 ${KstCalendar.formatDateTimeKstDisplay(member.lastExit)}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
                     ),
                   ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '$percentage %',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
                 ),
-                Text(
-                  member.isPresent
-                      ? '잔류 ${_liveDuration(member.checkIn)}'
-                      : '출석률',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    color: AppColors.textSecondary,
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: toggleExpanded,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        member.isPresent
+                                            ? Icons.check_rounded
+                                            : Icons.close_rounded,
+                                        size: 17,
+                                        color: member.isPresent
+                                            ? const Color(0xFF2E7D32)
+                                            : const Color(0xFFC62828),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          member.name,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    member.isPresent
+                                        ? '체크인 ${KstCalendar.formatCheckTimeForDisplay(member.checkIn, assumeUtcWallOnDate: KstCalendar.ymdFromInstant(DateTime.now()))}'
+                                        : '마지막 퇴실 ${KstCalendar.formatDateTimeKstDisplay(member.lastExit)}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '$percentage %',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                Text(
+                                  member.isPresent
+                                      ? '잔류 ${_liveDuration(member.checkIn)}'
+                                      : '출석률',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 2, top: 2),
+                              child: Icon(
+                                isExpanded
+                                    ? Icons.expand_less_rounded
+                                    : Icons.expand_more_rounded,
+                                color: AppColors.textSecondary,
+                                size: 22,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            child: _isListView
-                ? _buildWeeklyList(member.memberId)
-                : _buildMonthlyHeatmap(member.memberId),
           ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: _isListView
+                  ? _buildWeeklyList(member.memberId)
+                  : _buildMonthlyHeatmap(member.memberId),
+            ),
         ],
-        ),
       ),
     );
   }
@@ -1523,8 +1470,13 @@ class _RetentionMember {
       return s.isEmpty ? null : s;
     }
 
+    final idRaw = json['memberId'];
+    final parsedId = idRaw is int
+        ? idRaw
+        : int.tryParse(idRaw?.toString() ?? '') ?? 0;
+
     return _RetentionMember(
-      memberId: (json['memberId'] as int?) ?? 0,
+      memberId: parsedId,
       name: name,
       initial: initial.isNotEmpty ? initial : (name.isNotEmpty ? name[0] : '?'),
       isPresent: json['isPresent'] as bool? ?? false,

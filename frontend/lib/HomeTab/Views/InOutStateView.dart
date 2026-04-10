@@ -86,6 +86,46 @@ class LabStatusCardState extends State<LabStatusCard>
     }
   }
 
+  /// 홈 탭 당겨서 새로고침: 최근 체류 API로 입실 여부·체크인 시각을 서버 기준으로 맞춤
+  /// (onStatusUpdated는 호출하지 않음 — HomePage에서 출석 카드 새로고침과 함께 처리)
+  Future<void> refreshFromServer() async {
+    if (!mounted) return;
+    try {
+      final records = await LabStayService.instance.getLast7Days();
+      if (!mounted) return;
+      if (records.isEmpty) {
+        setState(() {
+          _currentStatus = LabStatus.outLab;
+          _activeCheckInId = null;
+        });
+        await _persistAttendanceState();
+        return;
+      }
+      final last = records.first;
+      final entered =
+          last.checkIn != null && last.checkOut == null;
+      DateTime? parsedCheckIn;
+      if (last.checkIn != null) {
+        parsedCheckIn = DateTime.tryParse(last.checkIn!);
+      }
+      setState(() {
+        _currentStatus = entered ? LabStatus.inLab : LabStatus.outLab;
+        if (!entered) {
+          _activeCheckInId = null;
+        } else if (parsedCheckIn != null) {
+          _lastCheckInAt = parsedCheckIn;
+        }
+      });
+      await _persistAttendanceState();
+    } catch (_) {
+      await _syncStatusWithServer();
+    }
+  }
+
+  /// 알림 영역용: 현재 입실 중이면 마지막 체크인 시각
+  DateTime? get checkInTimeForNotification =>
+      _currentStatus == LabStatus.inLab ? _lastCheckInAt : null;
+
   Future<void> _persistAttendanceState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyCurrentStatus, _currentStatus.name);
@@ -135,9 +175,9 @@ class LabStatusCardState extends State<LabStatusCard>
         await _persistAttendanceState();
         widget.onStatusUpdated?.call(_lastCheckInAt);
       }
-      _showSnackBar(e.message);
-    } catch (_) {
-      _showSnackBar('체크인 중 오류가 발생했습니다.');
+      debugPrint('[check-in] ${e.message}');
+    } catch (e, st) {
+      debugPrint('[check-in] $e\n$st');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -146,7 +186,7 @@ class LabStatusCardState extends State<LabStatusCard>
   Future<void> _checkOut() async {
     if (_isSubmitting || _isLoading || _currentStatus == LabStatus.outLab) return;
     if (_activeCheckInId == null) {
-      _showSnackBar('체크아웃할 체크인 정보가 없어 진행할 수 없습니다.');
+      debugPrint('[check-out] activeCheckInId 없음');
       return;
     }
 
@@ -160,9 +200,9 @@ class LabStatusCardState extends State<LabStatusCard>
       widget.onStatusUpdated?.call(null);
       _showSnackBar('체크아웃되었습니다.');
     } on ApiException catch (e) {
-      _showSnackBar(e.message);
-    } catch (_) {
-      _showSnackBar('체크아웃 중 오류가 발생했습니다.');
+      debugPrint('[check-out] ${e.message}');
+    } catch (e, st) {
+      debugPrint('[check-out] $e\n$st');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

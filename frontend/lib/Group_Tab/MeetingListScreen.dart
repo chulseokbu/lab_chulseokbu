@@ -127,87 +127,8 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     return b.toString().trim();
   }
 
-  Future<void> _showAlert(String message) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('안내'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 참여 실패 시 상세 오류 + 클립보드 복사
-  Future<void> _showJoinErrorDetail({
-    required String summary,
-    required String detailText,
-  }) async {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('모임 참여 오류'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                summary,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 280),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      detailText,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        fontFamily: 'monospace',
-                        color: Colors.grey.shade800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final full =
-                  '$summary\n\n${detailText.trim()}'.trim();
-              await Clipboard.setData(ClipboardData(text: full));
-              messenger.showSnackBar(
-                const SnackBar(content: Text('오류 내용을 복사했습니다.')),
-              );
-            },
-            child: const Text('복사'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
+  void _logJoinFailure(String summary, String detailText) {
+    debugPrint('[join] $summary\n$detailText');
   }
 
   void _showCreateMeetingDialog() {
@@ -242,8 +163,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text('모임 참여', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: const Text('모임 참여'),
             content: TextField(
               controller: codeController,
               inputFormatters: [
@@ -260,7 +180,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               TextButton(
                 onPressed:
                     isJoining ? null : () => Navigator.of(dialogContext).pop(),
-                child: const Text('취소', style: TextStyle(color: Colors.grey)),
+                child: const Text('취소', style: TextStyle(color: AppColors.textSecondary)),
               ),
               ElevatedButton(
                 onPressed: isJoining ? null : () async {
@@ -275,9 +195,9 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                     if (token == null || token.toString().trim().isEmpty) {
                       if (!mounted) return;
                       Navigator.of(context, rootNavigator: true).pop();
-                      await _showJoinErrorDetail(
-                        summary: '로그인이 필요합니다.',
-                        detailText: _formatJoinDiagnostic(
+                      _logJoinFailure(
+                        '로그인이 필요합니다.',
+                        _formatJoinDiagnostic(
                           statusCode: null,
                           serverMessage: '',
                           responseBody: '',
@@ -327,10 +247,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                             (message.contains('참여') ||
                                 message.contains('가입')));
                     if (isAlreadyJoined) {
-                      await _showJoinErrorDetail(
-                        summary: '이미 이 모임에 참여 중입니다.',
-                        detailText: diagnostic,
-                      );
+                      _logJoinFailure('이미 이 모임에 참여 중입니다.', diagnostic);
                       return;
                     }
 
@@ -339,27 +256,26 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                             message.contains('존재하지') ||
                             message.contains('유효하지');
                     if (isInvalidMeeting) {
-                      await _showJoinErrorDetail(
-                        summary:
-                            '모임을 찾을 수 없거나 초대 코드가 올바르지 않습니다.',
-                        detailText: diagnostic,
+                      _logJoinFailure(
+                        '모임을 찾을 수 없거나 초대 코드가 올바르지 않습니다.',
+                        diagnostic,
                       );
                       return;
                     }
 
-                    await _showJoinErrorDetail(
-                      summary: message.isNotEmpty
+                    _logJoinFailure(
+                      message.isNotEmpty
                           ? message
                           : '모임 참여 요청이 실패했습니다. (HTTP ${response.statusCode})',
-                      detailText: diagnostic,
+                      diagnostic,
                     );
                   } catch (e, st) {
                     debugPrint("Join Error: $e\n$st");
                     if (!mounted) return;
                     Navigator.of(context, rootNavigator: true).pop();
-                    await _showJoinErrorDetail(
-                      summary: '네트워크 또는 클라이언트 오류가 발생했습니다.',
-                      detailText: _formatJoinDiagnostic(
+                    _logJoinFailure(
+                      '네트워크 또는 클라이언트 오류가 발생했습니다.',
+                      _formatJoinDiagnostic(
                         statusCode: null,
                         serverMessage: '',
                         responseBody: '',
@@ -392,7 +308,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
 
   void _goMeetingDetail(Meeting meeting) {
     if (meeting.meetingId == null) {
-      _showAlert('해당 모임 정보를 불러올 수 없습니다. 목록을 새로고침해 주세요.');
+      debugPrint('[meeting] meetingId 없음 — 목록 새로고침 필요');
       return;
     }
     Navigator.push(
