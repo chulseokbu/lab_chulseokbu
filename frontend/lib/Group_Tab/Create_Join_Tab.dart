@@ -225,7 +225,7 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
           title: const Text("모임 이름 변경"),
           content: TextField(
             controller: controller,
-            decoration: const InputDecoration(labelText: "새 이름"),
+            decoration: const InputDecoration(labelText: "새 모임 이름"),
           ),
           actions: [
             TextButton(

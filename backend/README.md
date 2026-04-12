@@ -32,6 +32,7 @@ Authorization: Bearer <accessToken>
 
 - **회원가입**: `POST /lab/users/sign`
 - **로그인**: `POST /lab/users/login`
+- **회원 탈퇴**: `DELETE /lab/users/withdraw` — `Authorization: Bearer` 만 필요(비밀번호 없음). 성공 시 `{ "message": "회원 탈퇴가 완료되었습니다." }`
 - **체크인(입실)**: `POST /lab/attendance/in`
   - 성공 응답: `{ "success": true, "data": { "checkInId": <inoutId> } }`
 - **체크아웃(퇴실)**: `POST /lab/attendance/out/{inoutId}`

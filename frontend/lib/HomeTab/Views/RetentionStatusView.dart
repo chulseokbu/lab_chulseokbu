@@ -151,7 +151,7 @@ class _RetentionStatusViewState extends State<RetentionStatusView> {
             return Meeting(
               meetingId: _parseMeetingId(m),
               code: (m['inviteCode'] ?? m['code'] ?? '').toString(),
-              name: m['name']?.toString() ?? '이름 없음',
+              name: m['name']?.toString() ?? '닉네임 없음',
               memberCount: m['memberCount'] as int? ?? 0,
               createdAt: m['createdAt']?.toString() ?? '',
               myRole: meetingRoleFromApi(m['myRole']),

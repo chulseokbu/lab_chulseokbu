@@ -13,7 +13,7 @@ class LabAttendanceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '랩실 출석부',
+      title: '출석뷰',
       theme: AppTheme.light,
       debugShowCheckedModeBanner: false,
       home: const AuthGate(),

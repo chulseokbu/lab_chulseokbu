@@ -12,7 +12,7 @@ class AppleOnboardingScreen extends StatefulWidget {
     this.authorizationCode,
     this.userIdentifier,
     this.emailHint,
-    this.nameHint,
+    this.nicknameHint,
     required this.onComplete,
   });
 
@@ -20,7 +20,7 @@ class AppleOnboardingScreen extends StatefulWidget {
   final String? authorizationCode;
   final String? userIdentifier;
   final String? emailHint;
-  final String? nameHint;
+  final String? nicknameHint;
   final VoidCallback onComplete;
 
   @override
@@ -42,8 +42,8 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
     if (widget.emailHint != null && widget.emailHint!.isNotEmpty) {
       _emailController.text = widget.emailHint!;
     }
-    if (widget.nameHint != null && widget.nameHint!.isNotEmpty) {
-      _nameController.text = widget.nameHint!;
+    if (widget.nicknameHint != null && widget.nicknameHint!.isNotEmpty) {
+      _nameController.text = widget.nicknameHint!;
     }
   }
 
@@ -129,7 +129,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
               children: [
                 const SizedBox(height: 8),
                 Text(
-                  '애플 계정으로 처음 로그인했어요.\n이메일·이름·전화번호·학번을 입력해주세요.',
+                  '애플 계정으로 처음 로그인했어요.\n가능하면 이메일은 Apple에서 가져왔어요. 닉네임·전화번호·학번을 입력해주세요.',
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.45,
@@ -163,12 +163,12 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
                             : null,
                       ),
                       const SizedBox(height: 20),
-                      _label('이름 (랩실용)'),
+                      _label('닉네임 (랩실용)'),
                       _field(
                         controller: _nameController,
-                        hint: '홍길동',
+                        hint: '랩실에서 쓸 닉네임',
                         validator: (v) =>
-                            (v == null || v.isEmpty) ? '이름을 입력해주세요.' : null,
+                            (v == null || v.isEmpty) ? '닉네임을 입력해주세요.' : null,
                       ),
                       const SizedBox(height: 20),
                       _label('전화번호'),

@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:frontend/core/theme/app_colors.dart';
 
 class EditProfileDialog extends StatefulWidget {
-  final String initialName;
+  final String initialNickname;
   final String initialStudentId;
   final String initialPhone;
   final String initialEmail;
-  final Future<void> Function(String name, String studentId) onSave;
+  final Future<void> Function(String nickname, String studentId) onSave;
   final VoidCallback? onLogout;
-  final Future<String?> Function(String password)? onWithdrawAccount;
+  /// 성공 시 `null`, 실패 시 사용자에게 보여줄 메시지
+  final Future<String?> Function()? onWithdrawAccount;
 
   const EditProfileDialog({
     super.key,
-    required this.initialName,
+    required this.initialNickname,
     required this.initialStudentId,
     required this.initialPhone,
     required this.initialEmail,
@@ -34,7 +35,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   @override
   void initState() {
     super.initState();
-    nameController = TextEditingController(text: widget.initialName);
+    nameController = TextEditingController(text: widget.initialNickname);
     idController = TextEditingController(text: widget.initialStudentId);
     phoneController = TextEditingController(text: widget.initialPhone);
     emailController = TextEditingController(text: widget.initialEmail);
@@ -51,56 +52,36 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
   Future<void> _showWithdrawFlow() async {
     if (widget.onWithdrawAccount == null) return;
-    final passwordController = TextEditingController();
-    final ok = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('회원 탈퇴'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('탈퇴 시 계정과 관련 데이터가 삭제됩니다. 비밀번호를 입력하세요.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: '비밀번호',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
+        content: const Text(
+          '탈퇴 시 계정과 관련 데이터가 삭제됩니다.\n정말 탈퇴할까요?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('취소'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('탈퇴', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
 
-    final password = ok == true ? passwordController.text.trim() : '';
-    passwordController.dispose();
-
-    if (ok != true || !mounted) return;
-    if (password.isEmpty) {
-      debugPrint('[withdraw] 비밀번호 비어 있음');
-      return;
-    }
-
-    final message = await widget.onWithdrawAccount!(password);
+    final message = await widget.onWithdrawAccount!();
     if (!mounted) return;
     if (message == null) {
-      Navigator.pop(context);
+      Navigator.of(context).pop(true);
       return;
     }
-    debugPrint('[withdraw] $message');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -160,7 +141,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               child: Column(
                 children: [
                   _buildProfileTextField(
-                      label: '이름',
+                      label: '닉네임',
                       controller: nameController,
                       icon: Icons.badge_outlined),
                   const SizedBox(height: 16),

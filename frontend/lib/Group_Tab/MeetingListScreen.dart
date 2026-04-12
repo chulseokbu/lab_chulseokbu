@@ -63,7 +63,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               return Meeting(
                 meetingId: _parseMeetingId(map),
                 code: (map['inviteCode'] ?? map['code'] ?? '').toString(),
-                name: map['name']?.toString() ?? '이름 없음',
+                name: map['name']?.toString() ?? '닉네임 없음',
                 memberCount: map['memberCount'] as int? ?? 0,
                 createdAt: map['createdAt']?.toString() ?? '',
                 myRole: meetingRoleFromApi(map['myRole']),

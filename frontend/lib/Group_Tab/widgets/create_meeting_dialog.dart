@@ -171,7 +171,7 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
                     onPressed: () {
                       final name = _nameController.text.trim();
                       if (name.isEmpty) {
-                        debugPrint('[create meeting] 이름 비어 있음');
+                        debugPrint('[create meeting] 모임 이름 비어 있음');
                         return;
                       }
                       widget.onCreate(name);

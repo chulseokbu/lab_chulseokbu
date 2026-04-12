@@ -91,7 +91,7 @@ void showOtherMemberProfile(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              displayName.isNotEmpty ? displayName : '이름 없음',
+                              displayName.isNotEmpty ? displayName : '닉네임 없음',
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,

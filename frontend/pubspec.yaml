@@ -39,6 +39,7 @@ dependencies:
   intl: ^0.20.2
   sign_in_with_apple: ^6.1.4
   flutter_svg: ^2.0.10+1
+  image: ^4.8.0
 
 dev_dependencies:
   flutter_test:
@@ -50,6 +51,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -64,6 +66,7 @@ flutter:
 
   assets:
     - assets/auth/apple_icon.svg
+    - assets/logo/chullogo.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -82,3 +85,9 @@ flutter:
           weight: 600
         - asset: assets/fonts/Pretendard-Bold.ttf
           weight: 700
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/logo/chullogo.png
+  remove_alpha_ios: true

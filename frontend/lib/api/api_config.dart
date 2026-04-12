@@ -9,12 +9,13 @@ class ApiConfig {
   // Member API
   static const String signup = '/lab/users/sign';
   static const String login = '/lab/users/login';
-  static const String withdrawAccount = '/lab/users/me';
+  /// 회원 탈퇴 — `Authorization: Bearer` 만 필요 (비밀번호 없음)
+  static const String withdrawAccount = '/lab/users/withdraw';
 
   /// Sign in with Apple — 서버에서 identityToken(JWT) 검증 후 기존 회원이면 로그인 응답과 동일한 본문.
   /// 미가입 시 HTTP 428 + `{ "needsProfile": true }` (404는 로그인 실패로만 처리).
   static const String appleAuth = '/lab/users/auth/apple';
-  /// 애플 최초 연동 후 프로필(학번·이름·전화·이메일 등) 제출. 성공 시 로그인과 동일한 본문(accessToken 등).
+  /// 애플 최초 연동 후 프로필(학번·닉네임·전화·이메일 등) 제출. 성공 시 로그인과 동일한 본문(accessToken 등).
   static const String appleCompleteProfile = '/lab/users/auth/apple/complete';
 
   // Lab Attendance API

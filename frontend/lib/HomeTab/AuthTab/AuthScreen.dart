@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:frontend/HomeTab/AuthTab/apple_onboarding_screen.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
 import 'package:frontend/core/theme/app_colors.dart';
+import 'package:frontend/core/widgets/app_logo.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/apple_auth_service.dart';
 import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/utils/apple_jwt_email.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -157,8 +159,13 @@ class _LoginScreenState extends State<LoginScreen> {
         credential.givenName,
         credential.familyName,
       ].whereType<String>().where((s) => s.isNotEmpty).toList();
-      final nameHint =
+      final nicknameHint =
           nameParts.isEmpty ? null : nameParts.join(' ');
+
+      final directEmail = credential.email?.trim();
+      final emailHint = (directEmail != null && directEmail.isNotEmpty)
+          ? directEmail
+          : readEmailFromAppleIdentityToken(rawIdentity);
 
       final result = await AppleAuthService.instance.loginWithAppleToken(
         identityToken: token,
@@ -187,8 +194,8 @@ class _LoginScreenState extends State<LoginScreen> {
               identityToken: token,
               authorizationCode: authCode,
               userIdentifier: credential.userIdentifier,
-              emailHint: credential.email,
-              nameHint: nameHint,
+              emailHint: emailHint,
+              nicknameHint: nicknameHint,
               onComplete: () {
                 Navigator.of(ctx).pop();
                 widget.onLoginSuccess();
@@ -229,26 +236,23 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 상단 로고 아이콘
+                  // 상단 로고
                   Container(
-                    width: 84,
-                    height: 84,
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 15,
+                          color: AppColors.primary.withOpacity(0.22),
+                          blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 48),
+                    child: const AppLogoImage(size: 84, borderRadius: 24),
                   ),
                   const SizedBox(height: 28),
                   const Text(
-                    '랩실 출석부',
+                    '출석뷰',
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.textPrimary, letterSpacing: -0.5),
                   ),
                   const SizedBox(height: 8),
@@ -425,7 +429,7 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreenState extends State<SignUpScreen> {
   final _signUpFormKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _nicknameController = TextEditingController();
   final TextEditingController _studentIdController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -445,7 +449,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       int memberIdValue = int.tryParse(inputStudentId) ?? 0;
       request.body = json.encode({
         "memberId": memberIdValue,
-        "nickname": _nameController.text.trim(),
+        "nickname": _nicknameController.text.trim(),
         "password": _passwordController.text.trim(),
         "email": _emailController.text.trim(),
         "phone": _phoneController.text.trim(),
@@ -465,7 +469,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         memberIdInt ??= memberIdValue;
 
         await profileService.saveProfile(
-          name: userData['username'] ?? userData['nickname'] ?? _nameController.text.trim(),
+          name: userData['username'] ?? userData['nickname'] ?? _nicknameController.text.trim(),
           studentId: inputStudentId,
           phone: userData['phone'] ?? _phoneController.text.trim(),
           email: userData['email'] ?? _emailController.text.trim(),
@@ -519,8 +523,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildLabel('이름'),
-                      _buildTextField(controller: _nameController, hintText: '홍길동', validator: (v) => (v == null || v.isEmpty) ? '이름을 입력해주세요.' : null),
+                      _buildLabel('닉네임'),
+                      _buildTextField(controller: _nicknameController, hintText: '랩실에서 쓸 닉네임', validator: (v) => (v == null || v.isEmpty) ? '닉네임을 입력해주세요.' : null),
                       const SizedBox(height: 20),
                       _buildLabel('학번'),
                       _buildTextField(controller: _studentIdController, hintText: '20241234', validator: (v) => (v == null || v.length < 8) ? '학번 8자리를 입력하세요.' : null),

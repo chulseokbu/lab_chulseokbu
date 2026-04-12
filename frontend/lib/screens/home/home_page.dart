@@ -15,6 +15,7 @@ import 'package:frontend/TabBar/Shared_widgets.dart';
 import 'package:frontend/HomeTab/Views/Profile_Service.dart';
 import 'package:frontend/HomeTab/Views/InOutStateView.dart';
 import 'package:frontend/core/theme/app_colors.dart';
+import 'package:frontend/core/widgets/app_logo.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.onLogout});
@@ -134,13 +135,9 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: AppColors.surface,
         elevation: 0,
         centerTitle: false,
-        title: Row(
-          children: [
-            const Icon(Icons.menu_book_rounded, color: AppColors.primary, size: 24),
-            const SizedBox(width: 8),
-            const Text('출석뷰',
-                style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
+        title: Semantics(
+          label: '출석뷰',
+          child: const AppLogoImage(size: 40, borderRadius: 11),
         ),
         actions: [
           GestureDetector(
@@ -173,16 +170,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showEditProfileDialog() {
-    showDialog(
+    showDialog<bool>(
       context: context,
       builder: (context) => EditProfileDialog(
-        initialName: _currentName,
+        initialNickname: _currentName,
         initialStudentId: _currentStudentId,
         initialPhone: _currentPhone,
         initialEmail: _currentEmail,
-        onSave: (name, id) async {
+        onSave: (nickname, id) async {
           await _profileService.saveProfile(
-            name: name,
+            name: nickname,
             studentId: id,
             memberId: int.tryParse(id),
             phone: _currentPhone,
@@ -190,7 +187,7 @@ class _HomePageState extends State<HomePage> {
           );
           await _loadUserData();
         },
-        onWithdrawAccount: (password) async {
+        onWithdrawAccount: () async {
           final data = await _profileService.loadProfile();
           final token = data['accessToken'];
           if (token == null || token.isEmpty) {
@@ -198,28 +195,26 @@ class _HomePageState extends State<HomePage> {
           }
           try {
             final response = await http.delete(
-              Uri.parse(
-                  '${ApiConfig.baseUrl}${ApiConfig.withdrawAccount}'),
+              Uri.parse('${ApiConfig.baseUrl}${ApiConfig.withdrawAccount}'),
               headers: {
                 'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
                 'Accept': 'application/json',
               },
-              body: json.encode({'password': password}),
             );
-            final decoded = json.decode(utf8.decode(response.bodyBytes))
-                as Map<String, dynamic>;
-            final msg = (decoded['message'] ?? '').toString();
-            final ok =
-                response.statusCode == 200 && decoded['success'] == true;
-            if (ok) {
-              await _labStatusKey.currentState?.autoCheckOut();
-              await _profileService.clearProfile();
-              widget.onLogout?.call();
+            if (response.statusCode == 200) {
               return null;
             }
+            var msg = '';
+            try {
+              final decoded = json.decode(utf8.decode(response.bodyBytes));
+              if (decoded is Map<String, dynamic>) {
+                msg = (decoded['message'] ?? '').toString();
+              }
+            } catch (_) {
+              msg = utf8.decode(response.bodyBytes);
+            }
             if (response.statusCode == 401) {
-              return msg.isNotEmpty ? msg : '비밀번호가 일치하지 않습니다.';
+              return msg.isNotEmpty ? msg : '인증이 만료되었습니다. 다시 로그인해주세요.';
             }
             return msg.isNotEmpty ? msg : '탈퇴 처리에 실패했습니다.';
           } catch (e) {
@@ -232,6 +227,17 @@ class _HomePageState extends State<HomePage> {
           widget.onLogout?.call();
         },
       ),
-    );
+    ).then((withdrawn) {
+      // 다이얼로그 라우트가 완전히 정리된 뒤 한 프레임에 탈퇴 후처리 (빌드 스코프·_dependents 충돌 방지)
+      if (withdrawn != true) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _labStatusKey.currentState?.autoCheckOut();
+        if (!mounted) return;
+        await _profileService.clearProfile();
+        if (!mounted) return;
+        widget.onLogout?.call();
+      });
+    });
   }
 }
