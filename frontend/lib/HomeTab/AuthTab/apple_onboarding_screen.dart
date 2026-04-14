@@ -34,6 +34,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   late final bool _isEmailLocked;
+  late final bool _isNicknameLocked;
   bool _loading = false;
 
   @override
@@ -42,10 +43,11 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
     if (widget.emailHint != null && widget.emailHint!.isNotEmpty) {
       _emailController.text = widget.emailHint!;
     }
-    _isEmailLocked = _emailController.text.trim().isNotEmpty;
     if (widget.nicknameHint != null && widget.nicknameHint!.isNotEmpty) {
       _nameController.text = widget.nicknameHint!;
     }
+    _isEmailLocked = _emailController.text.trim().isNotEmpty;
+    _isNicknameLocked = _nameController.text.trim().isNotEmpty;
   }
 
   @override
@@ -99,6 +101,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final intro = _buildIntroText();
     return Scaffold(
       backgroundColor: AppColors.authBackground,
       appBar: AppBar(
@@ -122,112 +125,188 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 30),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
-                Text(
-                  '애플 계정으로 처음 로그인했어요.\n가능하면 이메일은 Apple에서 가져왔어요. \n닉네임·전화번호·학번을 입력해주세요.',
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.45,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              Text(
+                intro,
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.45,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
                 ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _label('이메일'),
-                      _field(
-                        controller: _emailController,
-                        hint: 'example@university.ac.kr',
-                        readOnly: _isEmailLocked,
-                        validator: (v) => (v == null || !v.contains('@'))
-                            ? '이메일 형식이 아닙니다.'
-                            : null,
-                      ),
-                      const SizedBox(height: 20),
-                      _label('닉네임 (랩실용)'),
-                      _field(
-                        controller: _nameController,
-                        hint: '랩실에서 쓸 닉네임',
-                        validator: (v) =>
-                            (v == null || v.isEmpty) ? '닉네임을 입력해주세요.' : null,
-                      ),
-                      const SizedBox(height: 20),
-                      _label('전화번호'),
-                      _field(
-                        controller: _phoneController,
-                        hint: '010-1234-5678',
-                        validator: (v) => (v == null || !v.contains('-'))
-                            ? '형식을 확인하세요.'
-                            : null,
-                      ),
-                      const SizedBox(height: 20),
-                      _label('학번'),
-                      _field(
-                        controller: _studentIdController,
-                        hint: '20241234',
-                        keyboardType: TextInputType.number,
-                        validator: (v) =>
-                            (v == null || v.length < 8) ? '학번 8자리 이상을 입력하세요.' : null,
-                      ),
-                      const SizedBox(height: 28),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _loading ? null : _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                      if (_isEmailLocked || _isNicknameLocked) ...[
+                        Text(
+                          'Apple에서 공유한 정보',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_isEmailLocked) ...[
+                          _label('이메일'),
+                          _appleProvidedValue(_emailController.text.trim()),
+                          const SizedBox(height: 16),
+                        ],
+                        if (_isNicknameLocked) ...[
+                          _label('이름'),
+                          _appleProvidedValue(_nameController.text.trim()),
+                          const SizedBox(height: 20),
+                        ],
+                        if (!_isEmailLocked || !_isNicknameLocked)
+                          Text(
+                            '추가 정보',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textSecondary,
                             ),
                           ),
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text(
-                                  '가입 완료',
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold,
+                        if (!_isEmailLocked || !_isNicknameLocked)
+                          const SizedBox(height: 12),
+                      ],
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (!_isEmailLocked) ...[
+                              _label('이메일'),
+                              _field(
+                                controller: _emailController,
+                                hint: 'example@university.ac.kr',
+                                validator: (v) =>
+                                    (v == null || !v.contains('@'))
+                                        ? '이메일 형식이 아닙니다.'
+                                        : null,
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                            if (!_isNicknameLocked) ...[
+                              _label('닉네임 (랩실용)'),
+                              _field(
+                                controller: _nameController,
+                                hint: '랩실에서 쓸 닉네임',
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? '닉네임을 입력해주세요.'
+                                    : null,
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                            _label('전화번호'),
+                            _field(
+                              controller: _phoneController,
+                              hint: '010-1234-5678',
+                              validator: (v) => (v == null || !v.contains('-'))
+                                  ? '형식을 확인하세요.'
+                                  : null,
+                            ),
+                            const SizedBox(height: 20),
+                            _label('학번'),
+                            _field(
+                              controller: _studentIdController,
+                              hint: '20241234',
+                              keyboardType: TextInputType.number,
+                              validator: (v) => (v == null || v.length < 8)
+                                  ? '학번 8자리 이상을 입력하세요.'
+                                  : null,
+                            ),
+                            const SizedBox(height: 28),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : _submit,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        '가입 완료',
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 32),
-              ],
-            ),
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  String _buildIntroText() {
+    if (_isEmailLocked && _isNicknameLocked) {
+      return '애플 계정으로 처음 로그인했어요.\nApple에서 공유한 이름과 이메일은 아래에 표시됩니다.\n랩 이용을 위해 전화번호와 학번만 입력해주세요.';
+    }
+    if (_isEmailLocked) {
+      return '애플 계정으로 처음 로그인했어요.\nApple에서 공유한 이메일은 아래에 표시됩니다.\n닉네임·전화번호·학번을 입력해주세요.';
+    }
+    if (_isNicknameLocked) {
+      return '애플 계정으로 처음 로그인했어요.\nApple에서 공유한 이름은 아래에 표시됩니다.\n이메일·전화번호·학번을 입력해주세요.';
+    }
+    return '애플 계정으로 처음 로그인했어요.\n이메일·닉네임·전화번호·학번을 입력해주세요.';
+  }
+
+  /// App Store 심사: Apple이 이미 제공한 값은 입력 필드로 다시 요구하지 않도록 표시만 한다.
+  Widget _appleProvidedValue(String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.background.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        value,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
         ),
       ),
     );
@@ -250,7 +329,6 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
   Widget _field({
     required TextEditingController controller,
     required String hint,
-    bool readOnly = false,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
   }) {
@@ -258,15 +336,12 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
       controller: controller,
       validator: validator,
       keyboardType: keyboardType,
-      readOnly: readOnly,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: AppColors.textHint),
         filled: true,
-        fillColor: readOnly
-            ? AppColors.background.withOpacity(0.7)
-            : AppColors.background,
+        fillColor: AppColors.background,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
