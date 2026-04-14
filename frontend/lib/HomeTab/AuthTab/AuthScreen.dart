@@ -509,7 +509,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                const Text('새로운 계정 만들기', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.textPrimary, letterSpacing: -0.5)),
                 const SizedBox(height: 32),
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -525,7 +524,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       _buildTextField(controller: _nicknameController, hintText: '랩실에서 쓸 닉네임', validator: (v) => (v == null || v.isEmpty) ? '닉네임을 입력해주세요.' : null),
                       const SizedBox(height: 20),
                       _buildLabel('학번'),
-                      _buildTextField(controller: _studentIdController, hintText: '20241234', validator: (v) => (v == null || v.length < 8) ? '학번 8자리를 입력하세요.' : null),
+                      _buildTextField(controller: _studentIdController, hintText: '20241234', validator: (v) => (v == null || v.length < 8) ? '학번 8자리 이상을 입력하세요.' : null),
                       const SizedBox(height: 20),
                       _buildLabel('전화번호'),
                       _buildTextField(controller: _phoneController, hintText: '010-1234-5678', validator: (v) => (v == null || !v.contains('-')) ? '형식을 확인하세요.' : null),
