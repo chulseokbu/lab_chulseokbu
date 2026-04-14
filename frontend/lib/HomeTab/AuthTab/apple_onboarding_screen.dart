@@ -184,7 +184,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
                         hint: '20241234',
                         keyboardType: TextInputType.number,
                         validator: (v) =>
-                            (v == null || v.length < 8) ? '학번 8자리를 입력하세요.' : null,
+                            (v == null || v.length < 8) ? '학번 8자리 이상을 입력하세요.' : null,
                       ),
                       const SizedBox(height: 28),
                       SizedBox(
