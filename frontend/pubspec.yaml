@@ -16,7 +16,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-# iOS: 앞(1.0.1)=사용자에게 보이는 버전, 뒤(+2)=빌드(스토어 업로드마다 반드시 증가)
+# iOS: 앞=CFBundleShortVersionString, 뒤(+N)=CFBundleVersion. 스토어 업로드마다 +N은 반드시 증가.
+# Xcode 아카이브 전에 `flutter pub get` 실행. Organizer가 계속 1.0.0(1)이면 `ios/Flutter/Generated.xcconfig` 삭제 후 다시 `flutter pub get`.
 version: 1.0.1+2
 
 environment:
