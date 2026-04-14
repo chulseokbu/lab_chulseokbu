@@ -33,6 +33,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
   final _studentIdController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  late final bool _isEmailLocked;
   bool _loading = false;
 
   @override
@@ -41,6 +42,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
     if (widget.emailHint != null && widget.emailHint!.isNotEmpty) {
       _emailController.text = widget.emailHint!;
     }
+    _isEmailLocked = _emailController.text.trim().isNotEmpty;
     if (widget.nicknameHint != null && widget.nicknameHint!.isNotEmpty) {
       _nameController.text = widget.nicknameHint!;
     }
@@ -156,6 +158,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
                       _field(
                         controller: _emailController,
                         hint: 'example@university.ac.kr',
+                        readOnly: _isEmailLocked,
                         validator: (v) => (v == null || !v.contains('@'))
                             ? '이메일 형식이 아닙니다.'
                             : null,
@@ -247,6 +250,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
   Widget _field({
     required TextEditingController controller,
     required String hint,
+    bool readOnly = false,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
   }) {
@@ -254,12 +258,15 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
       controller: controller,
       validator: validator,
       keyboardType: keyboardType,
+      readOnly: readOnly,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: AppColors.textHint),
         filled: true,
-        fillColor: AppColors.background,
+        fillColor: readOnly
+            ? AppColors.background.withOpacity(0.7)
+            : AppColors.background,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
