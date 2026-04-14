@@ -46,7 +46,6 @@ public class MemberService {
                 hashedPassword,
                 requestDto.email(),
                 requestDto.phone(),
-                requestDto.gender(),
                 new ArrayList<>(),
                 null
         );
@@ -133,7 +132,6 @@ public class MemberService {
                 hashedRandom,
                 dto.email(),
                 dto.phone(),
-                dto.gender(),
                 new ArrayList<>(),
                 sub
         );

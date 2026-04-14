@@ -72,7 +72,6 @@ class AppleAuthService {
     required String nickname,
     required String phone,
     required String email,
-    required String gender,
   }) async {
     final res = await _client.postWithoutAuth(
       ApiConfig.appleCompleteProfile,
@@ -86,7 +85,6 @@ class AppleAuthService {
         'nickname': nickname,
         'phone': phone,
         'email': email,
-        'gender': gender,
       },
     );
 

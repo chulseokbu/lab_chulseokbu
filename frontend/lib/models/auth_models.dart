@@ -5,7 +5,6 @@ class MemberSignupRequestDto {
   final String password;
   final String email;
   final String phone;
-  final String gender; // "MALE" | "FEMALE"
 
   MemberSignupRequestDto({
     required this.memberId,
@@ -13,7 +12,6 @@ class MemberSignupRequestDto {
     required this.password,
     required this.email,
     required this.phone,
-    required this.gender,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,7 +20,6 @@ class MemberSignupRequestDto {
         'password': password,
         'email': email,
         'phone': phone,
-        'gender': gender,
       };
 }
 

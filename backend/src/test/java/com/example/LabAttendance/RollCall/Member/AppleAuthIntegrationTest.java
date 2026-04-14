@@ -55,8 +55,7 @@ class AppleAuthIntegrationTest {
                   "memberId": %d,
                   "nickname": "%s",
                   "email": "%s",
-                  "phone": "010-9999-8888",
-                  "gender": "MALE"
+                  "phone": "010-9999-8888"
                 }
                 """.formatted(dummyToken, memberNum, nickname, email);
 

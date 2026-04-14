@@ -434,7 +434,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  String _selectedGender = "MALE";
   bool _isLoading = false;
 
   Future<void> _handleSignUp() async {
@@ -453,7 +452,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
         "password": _passwordController.text.trim(),
         "email": _emailController.text.trim(),
         "phone": _phoneController.text.trim(),
-        "gender": _selectedGender,
       });
       request.headers.addAll(headers);
 
@@ -538,21 +536,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       _buildLabel('비밀번호'),
                       _buildTextField(controller: _passwordController, hintText: '8자리 이상', obscureText: true, validator: (v) => (v == null || v.length < 8) ? '8자리 이상 입력하세요.' : null),
                       const SizedBox(height: 20),
-                      _buildLabel('성별'),
-                      DropdownButtonFormField<String>(
-                        value: _selectedGender,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: AppColors.background,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: "MALE", child: Text("남성")),
-                          DropdownMenuItem(value: "FEMALE", child: Text("여성")),
-                        ],
-                        onChanged: (v) => setState(() => _selectedGender = v!),
-                      ),
                       const SizedBox(height: 32),
                       SizedBox(
                         width: double.infinity,

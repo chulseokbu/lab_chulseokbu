@@ -8,7 +8,6 @@ import com.example.LabAttendance.RollCall.Member.MemberRepository;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckInException;
 import com.example.LabAttendance.RollCall.global.Exception.AlreadyCheckOutException;
 import com.example.LabAttendance.RollCall.global.Exception.NotAttendanceTodayException;
-import com.example.LabAttendance.RollCall.global.Gender;
 import com.example.LabAttendance.RollCall.global.KoreaTime;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +49,6 @@ class AttendanceServiceTest {
         ReflectionTestUtils.setField(member, "password", "encoded-password");
         ReflectionTestUtils.setField(member, "email", "tom@test.com");
         ReflectionTestUtils.setField(member, "phone", "01012345678");
-        ReflectionTestUtils.setField(member, "gender", Gender.MALE);
     }
 
     @Test

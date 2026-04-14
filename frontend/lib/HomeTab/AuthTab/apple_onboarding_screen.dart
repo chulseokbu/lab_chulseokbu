@@ -33,7 +33,6 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
   final _studentIdController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  String _gender = 'MALE';
   bool _loading = false;
 
   @override
@@ -69,7 +68,6 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
         nickname: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         email: _emailController.text.trim(),
-        gender: _gender,
       );
       await AuthService.instance.applyLoginSuccess(dto);
       if (!mounted) return;
@@ -129,7 +127,7 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
               children: [
                 const SizedBox(height: 8),
                 Text(
-                  '애플 계정으로 처음 로그인했어요.\n가능하면 이메일은 Apple에서 가져왔어요. 닉네임·전화번호·학번을 입력해주세요.',
+                  '애플 계정으로 처음 로그인했어요.\n가능하면 이메일은 Apple에서 가져왔어요. \n닉네임·전화번호·학번을 입력해주세요.',
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.45,
@@ -187,26 +185,6 @@ class _AppleOnboardingScreenState extends State<AppleOnboardingScreen> {
                         keyboardType: TextInputType.number,
                         validator: (v) =>
                             (v == null || v.length < 8) ? '학번 8자리를 입력하세요.' : null,
-                      ),
-                      const SizedBox(height: 20),
-                      _label('성별'),
-                      DropdownButtonFormField<String>(
-                        value: _gender,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: AppColors.background,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 14),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'MALE', child: Text('남성')),
-                          DropdownMenuItem(value: 'FEMALE', child: Text('여성')),
-                        ],
-                        onChanged: (v) => setState(() => _gender = v!),
                       ),
                       const SizedBox(height: 28),
                       SizedBox(

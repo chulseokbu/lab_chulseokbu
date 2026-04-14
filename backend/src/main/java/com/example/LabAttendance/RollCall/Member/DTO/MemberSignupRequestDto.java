@@ -1,6 +1,5 @@
 package com.example.LabAttendance.RollCall.Member.DTO;
 
-import com.example.LabAttendance.RollCall.global.Gender;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,10 +23,7 @@ public record MemberSignupRequestDto(
         String email,
 
         @NotBlank(message = "전화번호는 필수 입력 값입니다.")
-        String phone,
-
-        @NotNull(message = "성별은 필수 입력 값입니다.")
-        Gender gender
+        String phone
 ){
 
 }

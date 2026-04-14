@@ -1,7 +1,6 @@
 package com.example.LabAttendance.RollCall.Member;
 
 import com.example.LabAttendance.RollCall.Attendance.Attendance;
-import com.example.LabAttendance.RollCall.global.Gender;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -34,10 +33,6 @@ public class Member {
 
     @Column(nullable = false)
     private String phone;
-
-    @Column(nullable = false)
-    @Enumerated(EnumType.STRING)
-    private Gender gender;
 
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Attendance> attandenceList = new ArrayList<>();
